@@ -67,13 +67,11 @@
 </MudStack>
 
 @code {
-    // A lista do Iniciar é a mesma para todas as instâncias: lida uma vez por sessão do manager (ou no botão).
-    private static Task<IReadOnlyList<AppChoice>>? _shared;
-
     private IReadOnlyList<AppChoice>? _apps;
     private string _status = "Lendo os apps do menu Iniciar...";
-    private readonly Dictionary<string, string?> _icons = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _loading = new(StringComparer.OrdinalIgnoreCase);
+    private Timer? _redraw;
+    private Task? _warm;
+    private volatile bool _dirty;
 
     private string StateText =>
         Instance.IsMissing ? "O app não está mais no menu Iniciar (desinstalado?)"
@@ -83,17 +81,26 @@
     protected override async Task OnInitializedAsync()
     {
         Instance.Changed += OnChanged;
-        await LoadAppsAsync(force: false);
+        // Redesenha no máximo a cada 150 ms enquanto os ícones chegam, não uma vez por ícone.
+        _redraw = new Timer(_ =>
+        {
+            if (_dirty || _warm is { IsCompleted: false })
+            {
+                _dirty = false;
+                _ = InvokeAsync(StateHasChanged);
+            }
+        }, null, 150, 150);
+        await LoadAppsAsync(refresh: false);
     }
 
-    private async Task LoadAppsAsync(bool force)
+    private async Task LoadAppsAsync(bool refresh)
     {
         try
         {
-            if (force || _shared is null || _shared.IsFaulted)
-                _shared = Sta.RunAsync(AppCatalog.List);
-            _apps = await _shared;
+            _apps = await AppCatalog.GetListAsync(refresh);
             _status = $"{_apps.Count} apps do menu Iniciar, incluindo os da Microsoft Store.";
+            _warm = AppCatalog.WarmAsync();
+            _ = _warm.ContinueWith(_ => _dirty = true, TaskScheduler.Default);
         }
         catch (Exception ex)
         {
@@ -106,7 +113,7 @@
     {
         _apps = null;
         _status = "Lendo os apps do menu Iniciar...";
-        await LoadAppsAsync(force: true);
+        await LoadAppsAsync(refresh: true);
     }
 
     private Task<IEnumerable<AppChoice>> Search(string? text, CancellationToken cancellationToken)
@@ -119,31 +126,20 @@
 
     private Task SelectApp(AppChoice? app) => Instance.SetAppAsync(app);
 
+    /// <summary>Ícone já carregado, ou <c>null</c> e pede (as linhas visíveis passam na frente da pré-carga).</summary>
     private string? IconFor(AppChoice app)
     {
-        if (_icons.TryGetValue(app.Id, out var url))
+        if (AppIcons.TryGetDataUrl(app.Id, out var url))
             return url;
-        if (_loading.Add(app.Id))
-            _ = LoadIconAsync(app.Id);
+        _ = AppIcons.GetDataUrlAsync(app.Id).ContinueWith(_ => _dirty = true, TaskScheduler.Default);
         return null;
-    }
-
-    private async Task LoadIconAsync(string id)
-    {
-        string? url = null;
-        try
-        {
-            url = await AppIcons.GetDataUrlAsync(id);
-        }
-        catch
-        {
-            // Sem ícone a linha mostra só o nome.
-        }
-        _icons[id] = url;
-        await InvokeAsync(StateHasChanged);
     }
 
     private void OnChanged() => _ = InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Instance.Changed -= OnChanged;
+    public void Dispose()
+    {
+        Instance.Changed -= OnChanged;
+        _redraw?.Dispose();
+    }
 }

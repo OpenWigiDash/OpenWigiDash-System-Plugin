@@ -10,6 +10,52 @@ internal static class AppCatalog
 {
     private const string AppsFolder = "shell:AppsFolder";
 
+    private static readonly object Gate = new();
+    private static Task<IReadOnlyList<AppChoice>>? _list;
+    private static Task? _icons;
+
+    /// <summary>
+    /// A lista, lida uma vez por sessão do Manager e dividida por todas as instâncias. <paramref name="refresh"/>
+    /// lê de novo (botão da tela de configurações).
+    /// </summary>
+    public static Task<IReadOnlyList<AppChoice>> GetListAsync(bool refresh = false)
+    {
+        lock (Gate)
+        {
+            if (refresh || _list is null || _list.IsFaulted)
+                _list = Sta.RunAsync(List);
+            return _list;
+        }
+    }
+
+    /// <summary>
+    /// Lê a lista e os ícones pequenos dela em segundo plano, um por vez (os ícones dos tiles passam na frente entre
+    /// um e outro). Depois da primeira vez os ícones vêm do disco e a lista abre pronta.
+    /// </summary>
+    public static Task WarmAsync()
+    {
+        lock (Gate)
+        {
+            if (_icons is { IsCompleted: false })
+                return _icons;
+            return _icons = Task.Run(async () =>
+            {
+                var apps = await GetListAsync().ConfigureAwait(false);
+                foreach (var app in apps)
+                {
+                    try
+                    {
+                        await AppIcons.GetDataUrlAsync(app.Id).ConfigureAwait(false);
+                    }
+                    catch (Exception)
+                    {
+                        // Sem ícone esta linha mostra só o nome.
+                    }
+                }
+            });
+        }
+    }
+
     /// <summary>Todos os apps, em ordem alfabética. Rode numa thread STA (<see cref="Sta"/>).</summary>
     public static IReadOnlyList<AppChoice> List()
     {

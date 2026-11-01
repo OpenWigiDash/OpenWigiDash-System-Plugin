@@ -51,16 +51,75 @@ internal static class AppIcons
         return fresh;
     }
 
-    /// <summary>Ícone pequeno em PNG data URL, para a lista da tela de configurações.</summary>
-    public static async Task<string?> GetDataUrlAsync(string id)
+    private static readonly ConcurrentDictionary<string, string?> ListUrls = new(StringComparer.OrdinalIgnoreCase);
+
+    private static string ListCacheDirectory { get; } = Path.Combine(CacheDirectory, "list");
+
+    /// <summary>Ícone pequeno da lista, se já está em memória (sem esperar nada).</summary>
+    public static bool TryGetDataUrl(string id, out string? url) => ListUrls.TryGetValue(id, out url);
+
+    /// <summary>
+    /// Ícone pequeno em PNG data URL, para a lista da tela de configurações. Vem da memória, senão do PNG guardado em
+    /// disco (instantâneo depois da primeira vez, mesmo com o Manager reiniciado), senão do shell, e aí é guardado.
+    /// </summary>
+    public static Task<string?> GetDataUrlAsync(string id)
     {
-        var bitmap = await LoadAsync(id, ListSize).ConfigureAwait(false);
-        if (bitmap is null)
-            return null;
-        using var stream = new MemoryStream();
-        lock (bitmap)
+        if (ListUrls.TryGetValue(id, out var cached))
+            return Task.FromResult(cached);
+        // Um pedido por app: a lista redesenha várias vezes enquanto os ícones chegam.
+        return InFlight.GetOrAdd(id, key => LoadDataUrlAsync(key).ContinueWith(t =>
+        {
+            InFlight.TryRemove(key, out _);
+            return t.IsCompletedSuccessfully ? t.Result : null;
+        }, TaskScheduler.Default));
+    }
+
+    private static readonly ConcurrentDictionary<string, Task<string?>> InFlight = new(StringComparer.OrdinalIgnoreCase);
+
+    private static async Task<string?> LoadDataUrlAsync(string id)
+    {
+
+        var path = Path.Combine(ListCacheDirectory, CacheName(id));
+        try
+        {
+            if (File.Exists(path))
+            {
+                var saved = "data:image/png;base64," + Convert.ToBase64String(await File.ReadAllBytesAsync(path).ConfigureAwait(false));
+                ListUrls[id] = saved;
+                return saved;
+            }
+        }
+        catch (IOException)
+        {
+            // Lê do shell.
+        }
+
+        var png = await Sta.RunAsync(() =>
+        {
+            using var bitmap = FromShell(id, ListSize);
+            if (bitmap is null)
+                return null;
+            using var stream = new MemoryStream();
             bitmap.Save(stream, ImageFormat.Png);
-        return "data:image/png;base64," + Convert.ToBase64String(stream.ToArray());
+            return stream.ToArray();
+        }).ConfigureAwait(false);
+
+        string? url = null;
+        if (png is not null)
+        {
+            url = "data:image/png;base64," + Convert.ToBase64String(png);
+            try
+            {
+                Directory.CreateDirectory(ListCacheDirectory);
+                await File.WriteAllBytesAsync(path, png).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Sem cache em disco a lista só fica mais lenta na próxima vez.
+            }
+        }
+        ListUrls[id] = url;
+        return url;
     }
 
     private static Bitmap? FromShell(string id, int size)
@@ -152,11 +211,10 @@ internal static class AppIcons
         return bitmap;
     }
 
-    private static string CachePath(string id)
-    {
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(id.ToLowerInvariant())))[..32];
-        return Path.Combine(CacheDirectory, hash + ".png");
-    }
+    private static string CacheName(string id) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(id.ToLowerInvariant())))[..32] + ".png";
+
+    private static string CachePath(string id) => Path.Combine(CacheDirectory, CacheName(id));
 
     private static void TrySave(string id, Bitmap bitmap)
     {
