@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using OpenWigi.Sdk;
 
@@ -13,7 +14,21 @@ namespace OpenWigiDash.SystemPlugin.Rendering;
 /// <param name="Running">Desenha o indicador de app aberto no canto inferior direito.</param>
 /// <param name="Dimmed">App não encontrado (desinstalado): ícone apagado.</param>
 /// <param name="Detail">Aviso pequeno no lugar do título (ex.: "Escolha um app").</param>
-public sealed record TileVisual(Bitmap? Icon, string? Title, bool Running, bool Dimmed = false, string? Detail = null);
+public sealed record TileVisual(Bitmap? Icon, string? Title, bool Running, bool Dimmed = false, string? Detail = null)
+{
+    public IconFit Fit { get; init; } = IconFit.Fill;
+}
+
+/// <summary>Quanto do tile o ícone do app ocupa.</summary>
+public enum IconFit
+{
+    /// <summary>Com margem em volta (78% do lado menor), como o desenho padrão.</summary>
+    Padded,
+    /// <summary>Corta a borda transparente do ícone e encaixa no tile inteiro, sem cortar o desenho.</summary>
+    Fill,
+    /// <summary>Corta a borda transparente e cobre o tile todo; no Mini (mais largo que alto) corta em cima e embaixo.</summary>
+    Cover,
+}
 
 /// <summary>
 /// Desenha o tile na área de conteúdo (o host pinta a moldura e o canto). Visual do Stream Deck: fundo preto, ícone
@@ -41,7 +56,13 @@ public static class TileRenderer
             var iconRect = new RectangleF((size.Width - iconSide) / 2f, (size.Height - iconSide) / 2f, iconSide, iconSide);
 
             if (visual.Icon is { } icon)
-                DrawIcon(g, icon, iconRect, visual.Dimmed);
+            {
+                if (visual.Fit == IconFit.Padded)
+                    DrawIcon(g, icon, iconRect, visual.Dimmed, cover: false, trim: false);
+                else
+                    DrawIcon(g, icon, new RectangleF(0, 0, size.Width, size.Height), visual.Dimmed,
+                        cover: visual.Fit == IconFit.Cover, trim: true);
+            }
             else
                 DrawDotGrid(g, iconRect, visual.Dimmed);
 
@@ -55,26 +76,72 @@ public static class TileRenderer
         return ToFrame(bitmap);
     }
 
-    private static void DrawIcon(Graphics g, Bitmap icon, RectangleF area, bool dimmed)
+    private static void DrawIcon(Graphics g, Bitmap icon, RectangleF area, bool dimmed, bool cover, bool trim)
     {
-        // Mantém a proporção (alguns ícones da Store não são quadrados).
-        float scale;
-        Rectangle source;
         lock (icon)
         {
-            source = new Rectangle(0, 0, icon.Width, icon.Height);
-            scale = Math.Min(area.Width / icon.Width, area.Height / icon.Height);
-            var w = icon.Width * scale;
-            var h = icon.Height * scale;
-            var target = new RectangleF(area.X + (area.Width - w) / 2, area.Y + (area.Height - h) / 2, w, h);
-            if (!dimmed)
+            RectangleF source = trim ? ContentBounds(icon) : new RectangleF(0, 0, icon.Width, icon.Height);
+            // Mantém a proporção (alguns ícones da Store não são quadrados).
+            var scale = cover
+                ? Math.Max(area.Width / source.Width, area.Height / source.Height)
+                : Math.Min(area.Width / source.Width, area.Height / source.Height);
+            if (cover)
             {
-                g.DrawImage(icon, target, source, GraphicsUnit.Pixel);
-                return;
+                // Recorta da fonte só o que cabe no tile, centrado.
+                var w = area.Width / scale;
+                var h = area.Height / scale;
+                source = new RectangleF(source.X + (source.Width - w) / 2, source.Y + (source.Height - h) / 2, w, h);
             }
+            var tw = source.Width * scale;
+            var th = source.Height * scale;
+            var target = new RectangleF(area.X + (area.Width - tw) / 2, area.Y + (area.Height - th) / 2, tw, th);
+
             using var attributes = new ImageAttributes();
-            attributes.SetColorMatrix(new ColorMatrix { Matrix33 = 0.35f });
-            g.DrawImage(icon, Rectangle.Round(target), 0, 0, icon.Width, icon.Height, GraphicsUnit.Pixel, attributes);
+            attributes.SetWrapMode(WrapMode.TileFlipXY); // sem borda clara no limite da imagem ao escalar
+            if (dimmed)
+                attributes.SetColorMatrix(new ColorMatrix { Matrix33 = 0.35f });
+            g.DrawImage(icon, PointsOf(target), source, GraphicsUnit.Pixel, attributes);
+        }
+    }
+
+    private static PointF[] PointsOf(RectangleF r) => [new(r.Left, r.Top), new(r.Right, r.Top), new(r.Left, r.Bottom)];
+
+    private static readonly ConditionalWeakTable<Bitmap, StrongBox<Rectangle>> Bounds = new();
+
+    /// <summary>
+    /// Área com desenho (alfa visível) do ícone. O shell entrega o ícone com margem transparente; sem ela o ícone
+    /// enche o tile. Calculada uma vez por bitmap.
+    /// </summary>
+    internal static Rectangle ContentBounds(Bitmap icon) =>
+        Bounds.GetValue(icon, static bitmap => new StrongBox<Rectangle>(MeasureContent(bitmap))).Value;
+
+    private static Rectangle MeasureContent(Bitmap bitmap)
+    {
+        var full = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
+        var data = bitmap.LockBits(full, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            var stride = data.Stride;
+            var pixels = new byte[stride * bitmap.Height];
+            Marshal.Copy(data.Scan0, pixels, 0, pixels.Length);
+            int left = bitmap.Width, top = bitmap.Height, right = -1, bottom = -1;
+            for (var y = 0; y < bitmap.Height; y++)
+            {
+                for (var x = 0; x < bitmap.Width; x++)
+                {
+                    if (pixels[y * stride + x * 4 + 3] <= 16)
+                        continue;
+                    if (x < left) left = x;
+                    if (x > right) right = x;
+                    if (y < top) top = y;
+                    if (y > bottom) bottom = y;
+                }
+            }
+            return right < 0 ? full : Rectangle.FromLTRB(left, top, right + 1, bottom + 1);
+        }
+        finally
+        {
+            bitmap.UnlockBits(data);
         }
     }
 

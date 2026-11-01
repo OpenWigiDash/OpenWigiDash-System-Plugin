@@ -13,6 +13,7 @@ public sealed class OpenApplicationInstance : IWidgetInstance
     internal const string TitleKey = "title";
     internal const string LongPressKey = "longPress";
     internal const string BringToFrontKey = "bringToFront";
+    internal const string IconFitKey = "iconFit";
 
     /// <summary>Quanto o toque espera o monitor conferir se o app está aberto antes de decidir.</summary>
     private static readonly TimeSpan RefreshWait = TimeSpan.FromMilliseconds(400);
@@ -33,6 +34,7 @@ public sealed class OpenApplicationInstance : IWidgetInstance
     public string Title { get; private set; } = "";
     public LongPressAction LongPress { get; private set; } = LongPressAction.Quit;
     public bool BringToFront { get; private set; } = true;
+    public IconFit IconFit { get; private set; } = IconFit.Fill;
 
     /// <summary>Para a tela de configurações: para onde o app aponta hoje e se está aberto.</summary>
     public AppTarget? Target => _watch.Target;
@@ -55,6 +57,8 @@ public sealed class OpenApplicationInstance : IWidgetInstance
             LongPress = action;
         if (bool.TryParse(await settings.GetAsync(BringToFrontKey, cancellationToken).ConfigureAwait(false), out var front))
             BringToFront = front;
+        if (Enum.TryParse<IconFit>(await settings.GetAsync(IconFitKey, cancellationToken).ConfigureAwait(false), out var fit))
+            IconFit = fit;
 
         if (App is not null)
         {
@@ -99,6 +103,14 @@ public sealed class OpenApplicationInstance : IWidgetInstance
         Changed?.Invoke();
     }
 
+    public async Task SetIconFitAsync(IconFit fit)
+    {
+        IconFit = fit;
+        await _context.Settings.SetAsync(IconFitKey, fit.ToString()).ConfigureAwait(false);
+        Changed?.Invoke();
+        _context.RequestRender();
+    }
+
     public ValueTask<WidgetFrame> RenderAsync(RenderReason reason, CancellationToken cancellationToken) =>
         ValueTask.FromResult(TileRenderer.Render(_context.PixelSize, _context.Theme, CurrentVisual()));
 
@@ -112,7 +124,7 @@ public sealed class OpenApplicationInstance : IWidgetInstance
         }
         var missing = IsMissing;
         return new TileVisual(_platform.PeekIcon(App.Id), NullIfEmpty(Title), _watch.State.IsRunning, missing,
-            missing ? "Não encontrado" : null);
+            missing ? "Não encontrado" : null) { Fit = IconFit };
     }
 
     public async ValueTask OnTouchAsync(TouchEvent touch, CancellationToken cancellationToken)

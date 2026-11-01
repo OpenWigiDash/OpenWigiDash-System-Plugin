@@ -28,6 +28,8 @@ if (-not $SkipBuild) {
         exit 1
     }
 }
+# Os arquivos web do MudBlazor vêm do host (o pacote do NuGet já tira; aqui tiramos à mão).
+Remove-Item -LiteralPath (Join-Path $staging 'wwwroot\_content\MudBlazor') -Recurse -Force -ErrorAction SilentlyContinue
 if (-not (Test-Path -LiteralPath (Join-Path $staging "$name.dll"))) {
     throw "Build output not found: $staging"
 }

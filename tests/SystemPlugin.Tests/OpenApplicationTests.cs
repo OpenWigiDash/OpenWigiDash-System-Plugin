@@ -173,3 +173,36 @@ public class OpenApplicationTests
         }
     }
 }
+
+public class TileRendererTests
+{
+    [Fact]
+    public void ContentBoundsSkipsTransparentMargin()
+    {
+        using var icon = new System.Drawing.Bitmap(64, 64, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var g = System.Drawing.Graphics.FromImage(icon))
+        {
+            g.Clear(System.Drawing.Color.Transparent);
+            g.FillRectangle(System.Drawing.Brushes.Red, 10, 20, 30, 24);
+        }
+
+        Assert.Equal(new System.Drawing.Rectangle(10, 20, 30, 24), OpenWigiDash.SystemPlugin.Rendering.TileRenderer.ContentBounds(icon));
+    }
+
+    [Theory]
+    [InlineData(OpenWigiDash.SystemPlugin.Rendering.IconFit.Padded)]
+    [InlineData(OpenWigiDash.SystemPlugin.Rendering.IconFit.Fill)]
+    [InlineData(OpenWigiDash.SystemPlugin.Rendering.IconFit.Cover)]
+    public void RendersEveryFitAtTileSize(OpenWigiDash.SystemPlugin.Rendering.IconFit fit)
+    {
+        using var icon = new System.Drawing.Bitmap(256, 256, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+        using (var g = System.Drawing.Graphics.FromImage(icon))
+            g.FillEllipse(System.Drawing.Brushes.Green, 40, 40, 176, 176);
+        var size = OpenWigi.Sdk.TileFrame.Default.ContentSize(OpenWigi.Sdk.WidgetSize.Mini.CellSpan);
+
+        var frame = OpenWigiDash.SystemPlugin.Rendering.TileRenderer.Render(size, new OpenWigi.Sdk.WidgetTheme(),
+            new OpenWigiDash.SystemPlugin.Rendering.TileVisual(icon, "Xbox", Running: true) { Fit = fit });
+
+        Assert.Equal(size, frame.Size);
+    }
+}
