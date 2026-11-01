@@ -17,6 +17,15 @@ namespace OpenWigiDash.SystemPlugin.Rendering;
 public sealed record TileVisual(Bitmap? Icon, string? Title, bool Running, bool Dimmed = false, string? Detail = null)
 {
     public IconFit Fit { get; init; } = IconFit.Fill;
+
+    /// <summary>Caractere da fonte de ícones do Windows, desenhado quando não há <see cref="Icon"/>.</summary>
+    public string? Glyph { get; init; }
+
+    /// <summary>Bolinhas de posição no topo (carrossel); 0 = nenhuma.</summary>
+    public int DotCount { get; init; }
+
+    /// <summary>Bolinha preenchida; -1 = nenhuma (o padrão atual não está na lista).</summary>
+    public int DotIndex { get; init; } = -1;
 }
 
 /// <summary>Quanto do tile o ícone do app ocupa.</summary>
@@ -69,8 +78,14 @@ public static class TileRenderer
                     DrawIcon(g, icon, new RectangleF(0, 0, size.Width, size.Height), visual.Dimmed,
                         cover: visual.Fit == IconFit.Cover, trim: true);
             }
+            else if (visual.Glyph is { } glyph)
+                DrawGlyph(g, size, theme, glyph, visual.Dimmed,
+                    hasText: !string.IsNullOrWhiteSpace(visual.Title) || !string.IsNullOrWhiteSpace(visual.Detail));
             else
                 DrawDotGrid(g, iconRect, visual.Dimmed);
+
+            if (visual.DotCount > 1)
+                DrawPositionDots(g, size, visual.DotCount, visual.DotIndex);
 
             var text = !string.IsNullOrWhiteSpace(visual.Detail) ? visual.Detail : visual.Title;
             if (!string.IsNullOrWhiteSpace(text))
@@ -209,6 +224,49 @@ public static class TileRenderer
         var bl = Median(samples.Select(p => p.B).ToList());
         var close = samples.Count(p => Math.Abs(p.R - r) <= 24 && Math.Abs(p.G - g) <= 24 && Math.Abs(p.B - bl) <= 24);
         return close >= samples.Count * 9 / 10 ? Color.FromArgb(r, g, bl) : null;
+    }
+
+    private static readonly string IconFont = PickIconFont();
+
+    private static string PickIconFont()
+    {
+        using var fonts = new InstalledFontCollection();
+        return fonts.Families.Any(f => f.Name == "Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets";
+    }
+
+    private static void DrawGlyph(Graphics g, PixelSize size, WidgetTheme theme, string glyph, bool dimmed, bool hasText)
+    {
+        var side = Math.Min(size.Width, size.Height);
+        var em = side * (hasText ? 0.5f : 0.62f);
+        var top = hasText ? -size.Height * 0.08f : 0;
+        using var font = new Font(IconFont, em, FontStyle.Regular, GraphicsUnit.Pixel);
+        var color = ToColor(theme.PrimaryForeground);
+        using var brush = new SolidBrush(dimmed ? Color.FromArgb(110, color) : color);
+        using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        g.DrawString(glyph, font, brush, new RectangleF(0, top, size.Width, size.Height), format);
+    }
+
+    /// <summary>Uma bolinha por item do carrossel, no topo; a do dispositivo atual preenchida.</summary>
+    private static void DrawPositionDots(Graphics g, PixelSize size, int count, int index)
+    {
+        var side = Math.Min(size.Width, size.Height);
+        var d = Math.Max(5f, side * 0.07f);
+        var gap = d * 0.7f;
+        var total = count * d + (count - 1) * gap;
+        if (total > size.Width - 8)
+            return;
+        var x = (size.Width - total) / 2;
+        var y = Math.Max(3f, side * 0.05f);
+        using var pen = new Pen(Color.FromArgb(200, 255, 255, 255), Math.Max(1f, d * 0.18f));
+        using var fill = new SolidBrush(Color.White);
+        for (var i = 0; i < count; i++)
+        {
+            var rect = new RectangleF(x + i * (d + gap), y, d, d);
+            if (i == index)
+                g.FillEllipse(fill, rect);
+            else
+                g.DrawEllipse(pen, rect);
+        }
     }
 
     /// <summary>A grade 3x3 de anéis que o Stream Deck usa quando não há app escolhido.</summary>

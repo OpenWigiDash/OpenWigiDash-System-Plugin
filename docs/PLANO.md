@@ -8,7 +8,7 @@ Substituto do plugin "System" do Stream Deck no OpenWigiDashManager, já no SDK 
 | Ordem | Widget | Estado |
 | --- | --- | --- |
 | 1 | Open Application | Primeira versão (1.0.0-preview.1) |
-| 2 | Placa de som (trocar o dispositivo de áudio padrão do Windows) | Próximo |
+| 2 | Audio Device (trocar a placa de som padrão do Windows) | Feito (mesma versão 1.0.0-preview.1) |
 | 3+ | Website, Hotkey, Hotkey Switch, Open, Close, Text, Multimedia | Depois, conforme o uso |
 
 ## Open Application
@@ -69,7 +69,7 @@ A UI e as chamadas do shell só rodam no Windows. Roteiro:
 5. Long-press nos três modos.
 6. Discord: atualizar (ou trocar a pasta `app-*`) e conferir que ícone e botão continuam.
 
-## Placa de som (próximo)
+## Audio Device (placa de som)
 
 Substitui o "Toggle Audio Device" do Stream Deck (prints na thread), com o que faltava nele.
 

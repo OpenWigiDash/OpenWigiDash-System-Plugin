@@ -9,11 +9,11 @@ plugin "System" do Stream Deck.
 | Widget | O que faz |
 | --- | --- |
 | Open Application | Abre um app com o ícone dele. Toque abre (ou traz para a frente, se já está aberto); long-press fecha ou força o fechamento; uma bolinha verde no canto mostra que o app está aberto |
+| Audio Device | Troca a placa de som padrão do Windows (saída ou entrada). Cada toque passa para o próximo de uma lista (carrossel), long-press volta para o primeiro |
 
 Tamanhos: Mini (meia célula) e Small (o 1x1 da grade antiga).
 
-Próximos: troca da placa de som do Windows e os outros do System do Stream Deck (Website, Hotkey, Text,
-Multimedia). Ver [docs/PLANO.md](docs/PLANO.md).
+Próximos: os outros do System do Stream Deck (Website, Hotkey, Text, Multimedia). Ver [docs/PLANO.md](docs/PLANO.md).
 
 ## Open Application
 
@@ -31,6 +31,17 @@ Opções:
 - **App**: busca pelo nome, com ícone.
 - **Long press**: não fazer nada, fechar o app (como clicar no X) ou forçar o fechamento.
 - **Trazer para a frente se já estiver aberto**: desligado, o toque sempre abre de novo.
+
+## Audio Device
+
+- **Direção**: saída ou entrada. **Papel**: padrão, comunicações ou os dois.
+- **Dispositivos**: lista de 2 ou mais; cada toque vai para o próximo ligado, dando a volta. Bolinhas no topo do tile
+  mostram qual está em uso.
+- **Reconhecer o dispositivo**: Fuzzy (padrão) acha o headset sem fio mesmo quando o dongle USB muda de porta e o
+  Windows cria outro id com nome "2- ..."; Exato usa só o id.
+- **Ícone** por dispositivo: automático pelo nome, um da lista (alto-falante, fone, headset, microfone, webcam,
+  monitor...) ou uma imagem sua.
+- O tile acompanha quando o padrão é trocado por fora (Painel de Som, outro app).
 
 ## Requisitos
 
