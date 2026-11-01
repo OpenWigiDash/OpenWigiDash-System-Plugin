@@ -206,3 +206,28 @@ public class TileRendererTests
         Assert.Equal(size, frame.Size);
     }
 }
+
+public class PlateTests
+{
+    [Fact]
+    public void SolidPlateIsDetectedAndTransparentIconIsNot()
+    {
+        using var plate = new System.Drawing.Bitmap(128, 128, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var g = System.Drawing.Graphics.FromImage(plate))
+        {
+            g.Clear(System.Drawing.Color.Transparent);
+            g.FillRectangle(new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(16, 124, 16)), 16, 16, 96, 96);
+            g.FillEllipse(System.Drawing.Brushes.White, 40, 40, 48, 48);
+        }
+        using var round = new System.Drawing.Bitmap(128, 128, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var g = System.Drawing.Graphics.FromImage(round))
+        {
+            g.Clear(System.Drawing.Color.Transparent);
+            g.FillEllipse(System.Drawing.Brushes.Blue, 16, 16, 96, 96);
+        }
+
+        var info = OpenWigiDash.SystemPlugin.Rendering.TileRenderer.Analyze(plate);
+        Assert.Equal(System.Drawing.Color.FromArgb(16, 124, 16).ToArgb(), info.Plate?.ToArgb());
+        Assert.Null(OpenWigiDash.SystemPlugin.Rendering.TileRenderer.Analyze(round).Plate);
+    }
+}

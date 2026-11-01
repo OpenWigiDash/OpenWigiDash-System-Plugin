@@ -57,6 +57,12 @@ public static class TileRenderer
 
             if (visual.Icon is { } icon)
             {
+                // Ícone com placa de cor sólida (Xbox, apps da Store): o tile inteiro fica dessa cor, como no Stream Deck.
+                Color? plate;
+                lock (icon)
+                    plate = Analyze(icon).Plate;
+                if (visual.Fit != IconFit.Padded && !visual.Dimmed && plate is { } color)
+                    g.Clear(color);
                 if (visual.Fit == IconFit.Padded)
                     DrawIcon(g, icon, iconRect, visual.Dimmed, cover: false, trim: false);
                 else
@@ -80,7 +86,7 @@ public static class TileRenderer
     {
         lock (icon)
         {
-            RectangleF source = trim ? ContentBounds(icon) : new RectangleF(0, 0, icon.Width, icon.Height);
+            RectangleF source = trim ? Analyze(icon).Bounds : new RectangleF(0, 0, icon.Width, icon.Height);
             // Mantém a proporção (alguns ícones da Store não são quadrados).
             var scale = cover
                 ? Math.Max(area.Width / source.Width, area.Height / source.Height)
@@ -106,43 +112,103 @@ public static class TileRenderer
 
     private static PointF[] PointsOf(RectangleF r) => [new(r.Left, r.Top), new(r.Right, r.Top), new(r.Left, r.Bottom)];
 
-    private static readonly ConditionalWeakTable<Bitmap, StrongBox<Rectangle>> Bounds = new();
+    /// <summary>Onde está o desenho do ícone e, se ele tem uma placa de cor sólida, que cor é.</summary>
+    internal sealed record IconInfo(Rectangle Bounds, Color? Plate);
+
+    private static readonly ConditionalWeakTable<Bitmap, IconInfo> Infos = new();
 
     /// <summary>
-    /// Área com desenho (alfa visível) do ícone. O shell entrega o ícone com margem transparente; sem ela o ícone
-    /// enche o tile. Calculada uma vez por bitmap.
+    /// O shell entrega o ícone com margem transparente; sem ela o ícone enche o tile. Calculado uma vez por bitmap
+    /// (chame com o lock do bitmap).
     /// </summary>
-    internal static Rectangle ContentBounds(Bitmap icon) =>
-        Bounds.GetValue(icon, static bitmap => new StrongBox<Rectangle>(MeasureContent(bitmap))).Value;
+    internal static IconInfo Analyze(Bitmap icon) => Infos.GetValue(icon, static bitmap => Measure(bitmap));
 
-    private static Rectangle MeasureContent(Bitmap bitmap)
+    internal static Rectangle ContentBounds(Bitmap icon)
+    {
+        lock (icon)
+            return Analyze(icon).Bounds;
+    }
+
+    private static IconInfo Measure(Bitmap bitmap)
     {
         var full = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
         var data = bitmap.LockBits(full, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        byte[] pixels;
+        int stride;
         try
         {
-            var stride = data.Stride;
-            var pixels = new byte[stride * bitmap.Height];
+            stride = data.Stride;
+            pixels = new byte[stride * bitmap.Height];
             Marshal.Copy(data.Scan0, pixels, 0, pixels.Length);
-            int left = bitmap.Width, top = bitmap.Height, right = -1, bottom = -1;
-            for (var y = 0; y < bitmap.Height; y++)
-            {
-                for (var x = 0; x < bitmap.Width; x++)
-                {
-                    if (pixels[y * stride + x * 4 + 3] <= 16)
-                        continue;
-                    if (x < left) left = x;
-                    if (x > right) right = x;
-                    if (y < top) top = y;
-                    if (y > bottom) bottom = y;
-                }
-            }
-            return right < 0 ? full : Rectangle.FromLTRB(left, top, right + 1, bottom + 1);
         }
         finally
         {
             bitmap.UnlockBits(data);
         }
+
+        int left = bitmap.Width, top = bitmap.Height, right = -1, bottom = -1;
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                if (pixels[y * stride + x * 4 + 3] <= 16)
+                    continue;
+                if (x < left) left = x;
+                if (x > right) right = x;
+                if (y < top) top = y;
+                if (y > bottom) bottom = y;
+            }
+        }
+        if (right < 0)
+            return new IconInfo(full, null);
+        var bounds = Rectangle.FromLTRB(left, top, right + 1, bottom + 1);
+        return new IconInfo(bounds, DetectPlate(pixels, stride, bounds));
+    }
+
+    /// <summary>
+    /// Olha o meio das quatro bordas do desenho (os cantos podem ser arredondados). Se quase tudo for opaco e da mesma
+    /// cor, o ícone é uma placa (Xbox: quadrado verde) e devolve essa cor.
+    /// </summary>
+    private static Color? DetectPlate(byte[] pixels, int stride, Rectangle b)
+    {
+        if (b.Width < 16 || b.Height < 16)
+            return null;
+        var samples = new List<(int R, int G, int B)>();
+        var opaque = 0;
+        var total = 0;
+        void Sample(int x, int y)
+        {
+            total++;
+            var i = y * stride + x * 4;
+            if (pixels[i + 3] < 240)
+                return;
+            opaque++;
+            samples.Add((pixels[i + 2], pixels[i + 1], pixels[i]));
+        }
+        var inset = 2;
+        for (var x = b.Left + b.Width * 15 / 100; x < b.Right - b.Width * 15 / 100; x++)
+        {
+            Sample(x, b.Top + inset);
+            Sample(x, b.Bottom - 1 - inset);
+        }
+        for (var y = b.Top + b.Height * 15 / 100; y < b.Bottom - b.Height * 15 / 100; y++)
+        {
+            Sample(b.Left + inset, y);
+            Sample(b.Right - 1 - inset, y);
+        }
+        if (total == 0 || opaque < total * 9 / 10)
+            return null;
+
+        static int Median(List<int> values)
+        {
+            values.Sort();
+            return values[values.Count / 2];
+        }
+        var r = Median(samples.Select(p => p.R).ToList());
+        var g = Median(samples.Select(p => p.G).ToList());
+        var bl = Median(samples.Select(p => p.B).ToList());
+        var close = samples.Count(p => Math.Abs(p.R - r) <= 24 && Math.Abs(p.G - g) <= 24 && Math.Abs(p.B - bl) <= 24);
+        return close >= samples.Count * 9 / 10 ? Color.FromArgb(r, g, bl) : null;
     }
 
     /// <summary>A grade 3x3 de anéis que o Stream Deck usa quando não há app escolhido.</summary>
