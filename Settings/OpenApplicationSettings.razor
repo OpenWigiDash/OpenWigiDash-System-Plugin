@@ -1,0 +1,141 @@
+@using OpenWigiDash.SystemPlugin.Apps
+@inherits WidgetSettingsComponent<OpenApplicationInstance>
+@implements IDisposable
+
+@* Tela de configurações do Open Application, com os mesmos campos do plugin System do Stream Deck. *@
+<MudStack Spacing="4">
+    <MudTextField T="string" Value="Instance.Title" ValueChanged="v => Instance.SetTitleAsync(v)" Label="Título"
+                  Variant="Variant.Outlined" Immediate="false" Clearable="true"
+                  HelperText="Texto embaixo do ícone. Vazio = só o ícone." />
+
+    <MudStack Row="true" AlignItems="AlignItems.Center">
+        <MudAutocomplete T="AppChoice" Value="Instance.App" ValueChanged="SelectApp" Label="App"
+                         Variant="Variant.Outlined" SearchFunc="Search" ToStringFunc="@(a => a?.Name)"
+                         MaxItems="null" ResetValueOnEmptyText="false" Clearable="true"
+                         Disabled="@(_apps is null)" Style="min-width: 320px"
+                         HelperText="@_status">
+            <ItemTemplate Context="app">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    @if (IconFor(app) is { } url)
+                    {
+                        <img src="@url" width="20" height="20" alt="" />
+                    }
+                    else
+                    {
+                        <span style="display:inline-block;width:20px;height:20px"></span>
+                    }
+                    <MudText Typo="Typo.body2">@app.Name</MudText>
+                </MudStack>
+            </ItemTemplate>
+        </MudAutocomplete>
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="ReloadApps" aria-label="Ler a lista de apps de novo" />
+    </MudStack>
+
+    <MudSelect T="LongPressAction" Value="Instance.LongPress" ValueChanged="v => Instance.SetLongPressAsync(v)"
+               Label="Long press" Variant="Variant.Outlined">
+        <MudSelectItem Value="LongPressAction.DoNothing">Não fazer nada</MudSelectItem>
+        <MudSelectItem Value="LongPressAction.Quit">Fechar o app</MudSelectItem>
+        <MudSelectItem Value="LongPressAction.ForceQuit">Forçar o fechamento</MudSelectItem>
+    </MudSelect>
+
+    <MudCheckBox T="bool" Value="Instance.BringToFront" ValueChanged="v => Instance.SetBringToFrontAsync(v)" Color="Color.Primary">
+        Trazer para a frente se já estiver aberto
+    </MudCheckBox>
+
+    @if (Instance.App is not null)
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small"
+                     Color="@(Instance.State.IsRunning ? Color.Success : Color.Default)" />
+            <MudText Typo="Typo.body2">@StateText</MudText>
+        </MudStack>
+        @if (Instance.Target is { } target)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="word-break: break-all">
+                @(target.ExePath ?? target.Aumid ?? target.Id)
+            </MudText>
+        }
+    }
+</MudStack>
+
+@code {
+    // A lista do Iniciar é a mesma para todas as instâncias: lida uma vez por sessão do manager (ou no botão).
+    private static Task<IReadOnlyList<AppChoice>>? _shared;
+
+    private IReadOnlyList<AppChoice>? _apps;
+    private string _status = "Lendo os apps do menu Iniciar...";
+    private readonly Dictionary<string, string?> _icons = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _loading = new(StringComparer.OrdinalIgnoreCase);
+
+    private string StateText =>
+        Instance.IsMissing ? "O app não está mais no menu Iniciar (desinstalado?)"
+        : Instance.State.IsRunning ? "Aberto agora"
+        : "Fechado";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Instance.Changed += OnChanged;
+        await LoadAppsAsync(force: false);
+    }
+
+    private async Task LoadAppsAsync(bool force)
+    {
+        try
+        {
+            if (force || _shared is null || _shared.IsFaulted)
+                _shared = Sta.RunAsync(AppCatalog.List);
+            _apps = await _shared;
+            _status = $"{_apps.Count} apps do menu Iniciar, incluindo os da Microsoft Store.";
+        }
+        catch (Exception ex)
+        {
+            _apps = [];
+            _status = "Não deu para ler os apps: " + ex.Message;
+        }
+    }
+
+    private async Task ReloadApps()
+    {
+        _apps = null;
+        _status = "Lendo os apps do menu Iniciar...";
+        await LoadAppsAsync(force: true);
+    }
+
+    private Task<IEnumerable<AppChoice>> Search(string? text, CancellationToken cancellationToken)
+    {
+        IEnumerable<AppChoice> apps = _apps ?? [];
+        if (!string.IsNullOrWhiteSpace(text) && !string.Equals(text, Instance.App?.Name, StringComparison.CurrentCulture))
+            apps = apps.Where(a => a.Name.Contains(text, StringComparison.CurrentCultureIgnoreCase));
+        return Task.FromResult(apps);
+    }
+
+    private Task SelectApp(AppChoice? app) => Instance.SetAppAsync(app);
+
+    private string? IconFor(AppChoice app)
+    {
+        if (_icons.TryGetValue(app.Id, out var url))
+            return url;
+        if (_loading.Add(app.Id))
+            _ = LoadIconAsync(app.Id);
+        return null;
+    }
+
+    private async Task LoadIconAsync(string id)
+    {
+        string? url = null;
+        try
+        {
+            url = await AppIcons.GetDataUrlAsync(id);
+        }
+        catch
+        {
+            // Sem ícone a linha mostra só o nome.
+        }
+        _icons[id] = url;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Instance.Changed -= OnChanged;
+}
