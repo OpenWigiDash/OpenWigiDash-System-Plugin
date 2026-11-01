@@ -39,10 +39,11 @@ public static class AudioGlyphs
             return "camera";
         if (ContainsAny(name, "headset", "quantum", "arctis", "hyperx", "cloud", "kraken", "astro"))
             return "headset";
-        if (ContainsAny(name, "fone", "headphone", "earphone", "airpods", "buds"))
-            return "headphones";
+        // "Microfone" contém "fone": o microfone vem antes do fone de ouvido.
         if (flow == AudioFlow.Input || ContainsAny(name, "microfone", "microphone", "mic "))
             return "microphone";
+        if (ContainsAny(name, "fone", "headphone", "earphone", "airpods", "buds"))
+            return "headphones";
         if (ContainsAny(name, "hdmi", "displayport", "nvidia", "monitor", " tv", "ac10", "lg ", "samsung"))
             return "monitor";
         return "speaker";
