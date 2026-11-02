@@ -88,8 +88,12 @@ public class AudioDeviceInstanceTests
         public IReadOnlyList<AudioDevice> GetDevices(AudioFlow flow) => flow == AudioFlow.Output ? Output : [];
         public string? GetDefaultId(AudioFlow flow, AudioRoles roles) => Defaults[roles == AudioRoles.Communications ? AudioRoles.Communications : AudioRoles.Default];
 
+        public bool Refuse { get; set; }
+
         public void SetDefault(string deviceId, AudioRoles roles)
         {
+            if (Refuse)
+                throw new System.Runtime.InteropServices.COMException("recusado", unchecked((int)0x80004005));
             if (roles != AudioRoles.Communications)
                 Defaults[AudioRoles.Default] = deviceId;
             if (roles != AudioRoles.Default)
@@ -117,6 +121,22 @@ public class AudioDeviceInstanceTests
 
         await instance.OnTouchAsync(Hold, default);
         Assert.Equal("spk", audio.Defaults[AudioRoles.Default]);
+    }
+
+    [Fact]
+    public async Task RefusedSwitchShowsOnTheTile()
+    {
+        var audio = new FakeAudio { Refuse = true };
+        var instance = new AudioDeviceInstance(new FakeContext(WidgetSize.Small), audio);
+        foreach (var device in audio.Output)
+            await instance.AddDeviceAsync(device);
+
+        await instance.OnTouchAsync(Tap, default);
+
+        Assert.Equal("spk", audio.Defaults[AudioRoles.Default]);
+        var visual = instance.CurrentVisual();
+        Assert.True(visual.Dimmed);
+        Assert.Equal("O Windows recusou", visual.Detail);
     }
 
     [Fact]

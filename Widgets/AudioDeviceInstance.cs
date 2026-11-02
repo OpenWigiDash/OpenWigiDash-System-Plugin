@@ -21,6 +21,8 @@ public sealed class AudioDeviceInstance : IWidgetInstance
     private readonly IAudioPlatform _audio;
     private readonly ConcurrentDictionary<string, Bitmap> _images = new();
     private List<AudioDeviceEntry> _entries = [];
+    private DateTime _failedAt = DateTime.MinValue;
+    private static readonly TimeSpan FailureShown = TimeSpan.FromSeconds(3);
 
     internal AudioDeviceInstance(IWidgetContext context, IAudioPlatform audio)
     {
@@ -174,6 +176,13 @@ public sealed class AudioDeviceInstance : IWidgetInstance
                 { Glyph = AudioGlyphs.For(null, null, Flow).Glyph };
         }
 
+        if (DateTime.UtcNow - _failedAt < FailureShown)
+        {
+            return new TileVisual(null, compact ? "Recusado" : title, false, Dimmed: true,
+                Detail: compact ? null : "O Windows recusou")
+                { Glyph = AudioGlyphs.For(null, null, Flow).Glyph };
+        }
+
         var index = DeviceMatcher.CurrentIndex(_entries, defaultId, devices, Matching);
         var current = devices.FirstOrDefault(d => string.Equals(d.Id, defaultId, StringComparison.OrdinalIgnoreCase));
         var entry = index >= 0 ? _entries[index] : null;
@@ -208,6 +217,10 @@ public sealed class AudioDeviceInstance : IWidgetInstance
         catch (Exception ex)
         {
             _context.Logger.LogWarning(ex, "Falha ao trocar o dispositivo de áudio.");
+            // Sem isso o toque parecia não fazer nada (ex.: o "Chat" de headsets JBL não aceita virar saída padrão).
+            _failedAt = DateTime.UtcNow;
+            _context.RequestRender();
+            _ = Task.Delay(FailureShown + TimeSpan.FromMilliseconds(100)).ContinueWith(_ => _context.RequestRender(), TaskScheduler.Default);
         }
         return ValueTask.CompletedTask;
     }
