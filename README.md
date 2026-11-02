@@ -10,6 +10,7 @@ plugin "System" do Stream Deck.
 | --- | --- |
 | Open Application | Abre um app com o ícone dele. Toque abre (ou traz para a frente, se já está aberto); long-press fecha ou força o fechamento; uma bolinha verde no canto mostra que o app está aberto |
 | Audio Device | Troca a placa de som padrão do Windows (saída ou entrada). Cada toque passa para o próximo de uma lista (carrossel), long-press volta para o primeiro |
+| Execute | Roda um programa (.exe, .bat, .cmd, .ps1, atalho) com argumentos e pasta de execução, ou um comando inline no cmd/PowerShell. O tile fica verde quando dá certo e vermelho quando falha |
 | System Info | Uma métrica do PC (CPU, GPU, RAM, VRAM, rede, disco, ping) com o valor grande e um minigráfico em tempo real, como o System Vitals do Stream Deck. Sem programa de terceiros |
 
 Tamanhos: Mini (meia célula) e Small (o 1x1 da grade antiga). O System Info também tem Wide e Large.
@@ -47,6 +48,28 @@ Opções:
 - **Ícone** por dispositivo: automático pelo nome, um da lista (alto-falante, fone, headset, microfone, webcam,
   monitor...) ou uma imagem sua.
 - O tile acompanha quando o padrão é trocado por fora (Painel de Som, outro app).
+
+## Execute
+
+Botão que roda alguma coisa no PC. Não tem o contexto de um app como o Open Application, então o ícone, o título e o
+fundo são escolhidos à mão.
+
+- **Executar**: programa ou arquivo, ou comando.
+  - **Programa**: caminho (com "Procurar…" ou colado; aceita `%USERPROFILE%` e aspas), **Argumentos** e **Pasta de
+    execução** (vazia = a pasta do arquivo). `.exe`, `.bat` e `.cmd` rodam direto; `.ps1` roda no PowerShell; atalhos,
+    pastas, links e documentos abrem pelo Windows, como um duplo clique.
+  - **Comando**: no cmd (várias linhas rodam em sequência), no Windows PowerShell ou no PowerShell 7 (script inteiro,
+    com várias linhas). Pasta de execução vazia = a pasta do usuário.
+- **Janela**: normal, minimizada, maximizada ou oculta. Com janela, comando e `.ps1` podem **manter a janela aberta**.
+- **Esperar terminar e conferir o resultado**: verde se sair com código 0, vermelho se não; enquanto roda, um relógio
+  azul no canto, e o long-press encerra. Desligado, verde = abriu. Ao mudar para Comando, já vem ligado e sem janela.
+- **Executar como administrador**: o Windows mostra o UAC no PC; "Não" no UAC fica vermelho.
+- **Aparência**: título, ícone da lista (inclui uma categoria "Ações": terminal, código, raio, pasta...), imagem do PC
+  (como no Open Application), tamanho da imagem e cor de fundo. Automático = o ícone do programa, ou terminal para
+  scripts e comandos.
+- **Testar**: roda dali mesmo e mostra o resultado, o código de saída e, sem janela, o fim do que o programa escreveu.
+
+Um toque enquanto ainda está rodando é ignorado, para não abrir duas vezes.
 
 ## System Info
 

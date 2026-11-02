@@ -35,6 +35,21 @@ public sealed record TileVisual(Bitmap? Icon, string? Title, bool Running, bool 
 
     /// <summary>Selo no canto inferior esquerdo (ex.: alto-falante azul = saída, microfone laranja = entrada).</summary>
     public TileBadge? Badge { get; init; }
+
+    /// <summary>Resultado de uma ação (Execute): rodando, deu certo ou falhou. Desenha borda e selo no canto.</summary>
+    public TileStatus Status { get; init; }
+}
+
+/// <summary>Retorno visual de uma ação disparada pelo tile.</summary>
+public enum TileStatus
+{
+    None,
+    /// <summary>Esperando o programa terminar: selo azul com relógio.</summary>
+    Running,
+    /// <summary>Deu certo: borda e selo verdes com um visto.</summary>
+    Success,
+    /// <summary>Falhou: borda e selo vermelhos com um X.</summary>
+    Failure,
 }
 
 /// <summary>Quadradinho colorido com um glifo da fonte de ícones do Windows.</summary>
@@ -108,6 +123,9 @@ public static class TileRenderer
 
             if (visual.Running)
                 DrawRunningDot(g, size);
+
+            if (visual.Status != TileStatus.None)
+                DrawStatus(g, size, visual.Status);
         }
         return ToFrame(bitmap);
     }
@@ -413,6 +431,39 @@ public static class TileRenderer
         var inset = d * 0.2f;
         using var dot = new SolidBrush(RunningColor);
         g.FillEllipse(dot, RectangleF.Inflate(rect, -inset, -inset));
+    }
+
+    public static readonly Color SuccessColor = Color.FromArgb(35, 165, 90);
+    public static readonly Color FailureColor = Color.FromArgb(218, 55, 60);
+    public static readonly Color BusyColor = Color.FromArgb(88, 101, 242);
+
+    /// <summary>
+    /// Selo redondo no canto inferior direito (visto, X ou relógio) e, no fim, uma borda da mesma cor em volta do tile,
+    /// para dar para ver de longe se deu certo.
+    /// </summary>
+    private static void DrawStatus(Graphics g, PixelSize size, TileStatus status)
+    {
+        var (color, glyph) = status switch
+        {
+            TileStatus.Success => (SuccessColor, "\uE73E"), // CheckMark
+            TileStatus.Failure => (FailureColor, "\uE711"), // Cancel
+            _ => (BusyColor, "\uE823"),                      // Recent (relógio)
+        };
+        var side = Math.Min(size.Width, size.Height);
+        if (status != TileStatus.Running)
+        {
+            var width = Math.Max(3f, side * 0.06f);
+            using var border = new Pen(color, width) { Alignment = PenAlignment.Inset };
+            g.DrawRectangle(border, 0, 0, size.Width - 1, size.Height - 1);
+        }
+        var d = Math.Max(14f, side * 0.34f);
+        var margin = Math.Max(3f, side * 0.07f);
+        var rect = new RectangleF(size.Width - d - margin, size.Height - d - margin, d, d);
+        using (var ring = new SolidBrush(RingColor))
+            g.FillEllipse(ring, RectangleF.Inflate(rect, d * 0.08f, d * 0.08f));
+        using (var fill = new SolidBrush(color))
+            g.FillEllipse(fill, rect);
+        FillGlyph(g, glyph, rect, d * 0.55f, Brushes.White);
     }
 
     private static FontFamily ResolveFamily(string name)

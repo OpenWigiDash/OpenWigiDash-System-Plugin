@@ -122,9 +122,18 @@ internal static class AppIcons
         return url;
     }
 
-    private static Bitmap? FromShell(string id, int size)
+    /// <summary>
+    /// Ícone que o Explorer mostra para um arquivo, pasta ou atalho (.exe, .bat, .lnk...), sem cache. Para o Execute,
+    /// que aponta para um caminho em vez de um app do Iniciar.
+    /// </summary>
+    public static Task<Bitmap?> LoadFileIconAsync(string path, int size = TileSize) =>
+        Sta.RunAsync(() => FromParsingName(path, size));
+
+    private static Bitmap? FromShell(string id, int size) => FromParsingName($@"shell:AppsFolder\{id}", size);
+
+    private static Bitmap? FromParsingName(string name, int size)
     {
-        if (Native.SHCreateItemFromParsingName($@"shell:AppsFolder\{id}", IntPtr.Zero, Native.IID_IShellItemImageFactory, out var obj) != 0)
+        if (Native.SHCreateItemFromParsingName(name, IntPtr.Zero, Native.IID_IShellItemImageFactory, out var obj) != 0)
             return null;
         var factory = (Native.IShellItemImageFactory)obj;
         try

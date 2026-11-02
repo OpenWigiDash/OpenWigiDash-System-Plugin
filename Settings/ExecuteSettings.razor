@@ -1,0 +1,286 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using OpenWigiDash.SystemPlugin.Execute
+@using OpenWigiDash.SystemPlugin.Rendering
+@inherits WidgetSettingsComponent<ExecuteInstance>
+@implements IDisposable
+@inject IDialogService Dialogs
+
+@* Tela de configurações do Execute: o que rodar em cima, aparência (como no Open Application) embaixo, e um botão de
+   testar com o resultado da última execução. *@
+<MudStack Spacing="4">
+    <MudTextField T="string" Value="@Instance.Title" ValueChanged="v => Instance.SetTitleAsync(v)" Label="Título"
+                  Variant="Variant.Outlined" Immediate="false" Clearable="true"
+                  HelperText="Texto embaixo do ícone. Vazio = só o ícone." />
+
+    <MudSelect T="ExecuteMode" Value="A.Mode" ValueChanged="SetMode" Label="Executar" Variant="Variant.Outlined">
+        <MudSelectItem Value="ExecuteMode.Program">Programa ou arquivo (.exe, .bat, .cmd, .ps1, atalho)</MudSelectItem>
+        <MudSelectItem Value="ExecuteMode.Command">Comando (cmd ou PowerShell)</MudSelectItem>
+    </MudSelect>
+
+    @if (A.Mode == ExecuteMode.Program)
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2">
+            <MudTextField T="string" Value="@A.Path" ValueChanged="v => Save(A with { Path = v ?? string.Empty })"
+                          Label="Arquivo" Variant="Variant.Outlined" Immediate="false" Style="min-width:320px"
+                          HelperText="Caminho completo. Aceita %USERPROFILE% e outras variáveis." />
+            <MudButton Variant="Variant.Outlined" OnClick="Browse" Style="margin-top:8px;flex:none">Procurar…</MudButton>
+        </MudStack>
+        <MudTextField T="string" Value="@A.Arguments" ValueChanged="v => Save(A with { Arguments = v ?? string.Empty })"
+                      Label="Argumentos" Variant="Variant.Outlined" Immediate="false"
+                      HelperText="Do jeito que iriam na linha de comando. Use aspas em caminhos com espaço." />
+    }
+    else
+    {
+        <MudSelect T="CommandShell" Value="A.Shell" ValueChanged="v => Save(A with { Shell = v })" Label="Rodar no"
+                   Variant="Variant.Outlined">
+            <MudSelectItem Value="CommandShell.Cmd">Prompt de Comando (cmd)</MudSelectItem>
+            <MudSelectItem Value="CommandShell.PowerShell">Windows PowerShell</MudSelectItem>
+            <MudSelectItem Value="CommandShell.Pwsh">PowerShell 7 (pwsh)</MudSelectItem>
+        </MudSelect>
+        <MudTextField T="string" Value="@A.Command" ValueChanged="v => Save(A with { Command = v ?? string.Empty })"
+                      Label="Comando" Variant="Variant.Outlined" Immediate="false" Lines="4" AutoGrow="true"
+                      Style="font-family:Consolas,monospace"
+                      HelperText="@(A.Shell == CommandShell.Cmd ? "Várias linhas rodam em sequência, como num .bat." : "Pode ter várias linhas, como um script.")" />
+    }
+
+    <MudStack Spacing="1">
+        <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2">
+            <MudTextField T="string" Value="@A.WorkingDirectory" ValueChanged="v => Save(A with { WorkingDirectory = v ?? string.Empty })"
+                          Label="Pasta de execução" Variant="Variant.Outlined" Immediate="false" Clearable="true"
+                          Style="min-width:320px" HelperText="@WorkingDirectoryHelp" />
+            @if (A.Mode == ExecuteMode.Program && FileFolder is { } folder)
+            {
+                <MudButton Variant="Variant.Text" OnClick="() => Save(A with { WorkingDirectory = folder })"
+                           Style="margin-top:8px;flex:none">Usar a pasta do arquivo</MudButton>
+            }
+        </MudStack>
+    </MudStack>
+
+    <MudSelect T="ExecuteWindow" Value="A.Window" ValueChanged="v => Save(A with { Window = v })" Label="Janela" Variant="Variant.Outlined">
+        <MudSelectItem Value="ExecuteWindow.Normal">Normal</MudSelectItem>
+        <MudSelectItem Value="ExecuteWindow.Minimized">Minimizada</MudSelectItem>
+        <MudSelectItem Value="ExecuteWindow.Maximized">Maximizada</MudSelectItem>
+        <MudSelectItem Value="ExecuteWindow.Hidden">Oculta (sem janela)</MudSelectItem>
+    </MudSelect>
+
+    @if (ShowKeepOpen)
+    {
+        <MudCheckBox T="bool" Value="A.KeepOpen" ValueChanged="v => Save(A with { KeepOpen = v })" Color="Color.Primary">
+            Manter a janela aberta no fim (para ler o resultado)
+        </MudCheckBox>
+    }
+
+    <MudStack Spacing="0">
+        <MudCheckBox T="bool" Value="A.WaitForExit" ValueChanged="v => Save(A with { WaitForExit = v })" Color="Color.Primary">
+            Esperar terminar e conferir o resultado
+        </MudCheckBox>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Style="margin-left:42px">
+            @(A.WaitForExit
+                ? "Verde se sair com código 0, vermelho se não. Enquanto roda, o tile mostra um relógio; long-press encerra."
+                : "Verde assim que abrir, vermelho se não abrir (arquivo não encontrado, UAC cancelado...).")
+        </MudText>
+    </MudStack>
+
+    <MudStack Spacing="0">
+        <MudCheckBox T="bool" Value="A.RunAsAdmin" ValueChanged="v => Save(A with { RunAsAdmin = v })" Color="Color.Primary">
+            Executar como administrador
+        </MudCheckBox>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Style="margin-left:42px">
+            O Windows mostra o aviso do UAC no PC a cada toque. Como administrador não dá para ler a saída do programa.
+        </MudText>
+    </MudStack>
+
+    <MudDivider />
+    <MudText Typo="Typo.overline" Color="Color.Secondary">Aparência</MudText>
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:8px;flex:none;
+                     background:@(Instance.Background ?? "#000");color:#fff">
+            @if (Instance.CustomIconDataUrl is { } custom)
+            {
+                <img src="@custom" width="40" height="40" alt="" style="object-fit:contain" />
+            }
+            else
+            {
+                <GlyphView Option="@(IconLibrary.ByKey(Instance.Glyph) ?? Instance.AutomaticGlyph)" Size="30"
+                           Background="@(Instance.Background ?? "#000")" />
+            }
+        </span>
+        <MudButton Variant="Variant.Outlined" OnClick="PickGlyph">Escolher ícone…</MudButton>
+        <label class="mud-button-root mud-button mud-button-outlined mud-button-outlined-default mud-button-outlined-size-medium" style="cursor:pointer">
+            <span class="mud-button-label">@(Instance.CustomIconFileId is null ? "Imagem do PC…" : "Trocar imagem…")</span>
+            <InputFile OnChange="UploadIcon" accept="@CustomIconFile.Accept" style="display:none" />
+        </label>
+        @if (Instance.CustomIconFileId is not null)
+        {
+            <MudButton Variant="Variant.Text" OnClick="ClearIcon">Tirar a imagem</MudButton>
+        }
+        @if (_iconBusy)
+        {
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+        }
+    </MudStack>
+    <MudText Typo="Typo.caption" Color="@(_iconError is null ? Color.Secondary : Color.Error)" Style="margin-top:-12px">
+        @(_iconError ?? IconHelp)
+    </MudText>
+
+    <MudSelect T="IconFit" Value="Instance.IconFit" ValueChanged="v => Instance.SetIconFitAsync(v)"
+               Label="Tamanho da imagem" Variant="Variant.Outlined"
+               HelperText="Vale para a imagem do PC e o ícone do programa.">
+        <MudSelectItem Value="IconFit.Padded">Com margem</MudSelectItem>
+        <MudSelectItem Value="IconFit.Fill">Preencher o tile (sem cortar)</MudSelectItem>
+        <MudSelectItem Value="IconFit.Cover">Cobrir o tile todo (corta as bordas no Mini)</MudSelectItem>
+    </MudSelect>
+
+    <BackgroundColorField Value="@Instance.Background" ValueChanged="v => Instance.SetBackgroundAsync(v)"
+                          HelperText="Padrão = preto." />
+
+    <MudDivider />
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow"
+                   Disabled="@(A.IsEmpty || Instance.IsRunning)" OnClick="Test">Testar</MudButton>
+        @if (Instance.IsRunning)
+        {
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="() => Instance.Stop()">Parar</MudButton>
+        }
+    </MudStack>
+
+    @if (Instance.LastResult is { } last)
+    {
+        <MudStack Spacing="1">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                <MudIcon Icon="@(last.Success ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)"
+                         Color="@(last.Success ? Color.Success : Color.Error)" Size="Size.Small" />
+                <MudText Typo="Typo.body2">@ResultText(last)</MudText>
+            </MudStack>
+            @if (last.Output is { } output)
+            {
+                <pre style="margin:0;padding:8px;max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-all;
+                            font-size:12px;border-radius:6px;background:var(--mud-palette-background-gray)">@output</pre>
+            }
+        </MudStack>
+    }
+</MudStack>
+
+@code {
+    private ExecuteAction A => Instance.Action;
+
+    private bool _iconBusy;
+    private string? _iconError;
+
+    private const long MaxIconFileSize = 256L * 1024 * 1024;
+
+    private bool ShowKeepOpen =>
+        A.Window != ExecuteWindow.Hidden
+        && (A.Mode == ExecuteMode.Command || string.Equals(Path.GetExtension(A.ResolvedPath), ".ps1", StringComparison.OrdinalIgnoreCase));
+
+    private string? FileFolder =>
+        Path.IsPathFullyQualified(A.ResolvedPath) ? Path.GetDirectoryName(A.ResolvedPath) : null;
+
+    private string WorkingDirectoryHelp =>
+        A.Mode == ExecuteMode.Program ? "Vazio = a pasta do arquivo." : "Vazio = a sua pasta de usuário.";
+
+    private string IconHelp =>
+        Instance.CustomIconFileId is not null ? "Usando a imagem do PC."
+        : Instance.Glyph is not null ? "Usando um ícone da lista."
+        : A.Mode == ExecuteMode.Program && Instance.FileIcon is not null ? "Automático: o ícone do programa."
+        : "Automático: terminal. Escolha um da lista ou uma imagem (.png, .jpg, .ico, ou o ícone de um .exe/.dll).";
+
+    protected override void OnInitialized() => Instance.Changed += OnChanged;
+
+    private Task Save(ExecuteAction action) => Instance.SetActionAsync(action);
+
+    private Task SetMode(ExecuteMode mode)
+    {
+        var action = A with { Mode = mode };
+        // Comando costuma ser script: sem janela e conferindo o código de saída. Só muda se ainda está no padrão.
+        if (mode == ExecuteMode.Command && A.Window == ExecuteWindow.Normal && !A.WaitForExit)
+            action = action with { Window = ExecuteWindow.Hidden, WaitForExit = true };
+        return Save(action);
+    }
+
+    private async Task Browse()
+    {
+        try
+        {
+            if (await FileDialog.PickFileAsync("Escolha o programa", FileDialog.ProgramFilter, A.ResolvedPath) is { } path)
+                await Save(A with { Path = path });
+        }
+        catch (Exception ex)
+        {
+            _iconError = "Não deu para abrir a janela de arquivos: " + ex.Message;
+        }
+    }
+
+    private async Task PickGlyph()
+    {
+        var parameters = new DialogParameters<GlyphPickerDialog>
+        {
+            { d => d.Current, Instance.Glyph },
+            { d => d.Automatic, Instance.AutomaticGlyph },
+            { d => d.Hint, "Automático usa o ícone do programa (ou o terminal, para scripts e comandos). Para uma imagem sua, feche e use \"Imagem do PC\"." },
+        };
+        var dialog = await Dialogs.ShowAsync<GlyphPickerDialog>("Ícone", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true, CloseButton = true });
+        if (await dialog.Result is not { Canceled: false, Data: string key })
+            return;
+        await Instance.SetGlyphAsync(key.Length == 0 ? null : key);
+    }
+
+    private async Task UploadIcon(InputFileChangeEventArgs e)
+    {
+        _iconError = null;
+        if (e.File.Size > MaxIconFileSize)
+        {
+            _iconError = "Arquivo grande demais (máximo 256 MB). Escolha um .ico ou uma imagem.";
+            return;
+        }
+        _iconBusy = true;
+        var temp = Path.Combine(Path.GetTempPath(), "openwigidash-" + Guid.NewGuid().ToString("N") + Path.GetExtension(e.File.Name));
+        try
+        {
+            await using (var target = File.Create(temp))
+            await using (var source = e.File.OpenReadStream(maxAllowedSize: MaxIconFileSize))
+                await source.CopyToAsync(target);
+            await Instance.SetCustomIconAsync(temp);
+        }
+        catch (Exception ex)
+        {
+            _iconError = "Não deu para usar esse arquivo: " + ex.Message;
+        }
+        finally
+        {
+            _iconBusy = false;
+            try { File.Delete(temp); } catch (IOException) { }
+        }
+    }
+
+    private async Task ClearIcon()
+    {
+        _iconError = null;
+        await Instance.ClearCustomIconAsync();
+    }
+
+    private async Task Test()
+    {
+        var run = Instance.RunAsync();
+        StateHasChanged();
+        await run;
+    }
+
+    private string ResultText(ExecuteResult result)
+    {
+        var when = Instance.LastRunAt is { } at ? at.ToString("HH:mm:ss") + " · " : "";
+        if (!result.Success)
+            return when + (result.Error ?? "Falhou.");
+        if (result.ExitCode is { } code)
+            return when + $"Terminou com o código {code} em {result.Duration.TotalSeconds:0.0} s.";
+        return when + "Abriu.";
+    }
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Instance.Changed -= OnChanged;
+}

@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
-  <!-- Plugin "System" do OpenWigiDashManager (.NET 10, SDK 3.0). Widgets: Open Application, Audio Device e System Info. -->
+  <!-- Plugin "System" do OpenWigiDashManager (.NET 10, SDK 3.0). Widgets: Open Application, Execute, Audio Device e System Info. -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>OpenWigiDash.SystemPlugin</RootNamespace>
@@ -12,7 +12,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Authors>Victor Perez</Authors>
     <Product>System</Product>
-    <Description>Widgets do sistema para o WigiDash (OpenWigiDashManager): abrir aplicativos, trocar a placa de som e métricas do PC com minigráfico.</Description>
+    <Description>Widgets do sistema para o WigiDash (OpenWigiDashManager): abrir aplicativos, rodar programas e comandos, trocar a placa de som e métricas do PC com minigráfico.</Description>
   </PropertyGroup>
 
   <!-- `dotnet pack` gera o pacote de plugin para o nuget.org (docs/sdk.md do OpenWigiDashManager,
@@ -22,7 +22,7 @@
     <PackageId>OpenWigiDash.System</PackageId>
     <Title>System</Title>
     <Version>1.0.0-preview.1</Version>
-    <PackageTags>system;launcher;applications;audio;monitor;cpu;gpu</PackageTags>
+    <PackageTags>system;launcher;applications;execute;command;audio;monitor;cpu;gpu</PackageTags>
     <PackageProjectUrl>https://github.com/OpenWigiDash/OpenWigiDash-System-Plugin</PackageProjectUrl>
     <RepositoryUrl>https://github.com/OpenWigiDash/OpenWigiDash-System-Plugin</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>

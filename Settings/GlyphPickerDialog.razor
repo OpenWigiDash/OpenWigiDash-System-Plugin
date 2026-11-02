@@ -22,7 +22,7 @@
             @if (_category is null && string.IsNullOrWhiteSpace(_search))
             {
                 <button type="button" style="@TileStyle(Current is null)" @onclick="@(() => Pick(""))">
-                    <GlyphView Option="@AudioGlyphs.For(null, DeviceName, Flow)" Size="34" />
+                    <GlyphView Option="@(Automatic ?? AudioGlyphs.For(null, DeviceName, Flow))" Size="34" />
                     <span style="font-size:12px">Automático</span>
                 </button>
             }
@@ -37,7 +37,7 @@
             }
         </div>
         <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-3">
-            Para usar uma imagem sua, feche e clique no botão de imagem ao lado do dispositivo.
+            @(Hint ?? "Para usar uma imagem sua, feche e clique no botão de imagem ao lado do dispositivo.")
         </MudText>
     </DialogContent>
 </MudDialog>
@@ -48,6 +48,12 @@
     [Parameter] public string? Current { get; set; }
     [Parameter] public string? DeviceName { get; set; }
     [Parameter] public AudioFlow Flow { get; set; }
+
+    /// <summary>Ícone do "Automático" para widgets que não são de áudio (o Execute). Vazio = o palpite pelo dispositivo.</summary>
+    [Parameter] public IconOption? Automatic { get; set; }
+
+    /// <summary>Texto do rodapé; vazio = o do Audio Device.</summary>
+    [Parameter] public string? Hint { get; set; }
 
     private string? _category;
     private string? _search;
