@@ -16,6 +16,12 @@ public sealed class AudioDeviceInstance : IWidgetInstance
     internal const string RolesKey = "roles";
     internal const string MatchingKey = "matching";
     internal const string DevicesKey = "devices";
+    internal const string BackgroundKey = "background";
+    internal const string FlowBadgeKey = "flowBadge";
+
+    /// <summary>Cores do selo de direção: azul = saída, laranja = entrada.</summary>
+    internal static readonly Color OutputBadgeColor = Color.FromArgb(0x3B, 0x82, 0xF6);
+    internal static readonly Color InputBadgeColor = Color.FromArgb(0xF0, 0x93, 0x2B);
 
     private readonly IWidgetContext _context;
     private readonly IAudioPlatform _audio;
@@ -61,10 +67,36 @@ public sealed class AudioDeviceInstance : IWidgetInstance
             Roles = roles;
         if (Enum.TryParse<DeviceMatching>(await settings.GetAsync(MatchingKey, cancellationToken).ConfigureAwait(false), out var matching))
             Matching = matching;
+        Background = TileColor.Normalize(await settings.GetAsync(BackgroundKey, cancellationToken).ConfigureAwait(false));
+        if (bool.TryParse(await settings.GetAsync(FlowBadgeKey, cancellationToken).ConfigureAwait(false), out var badge))
+            ShowFlowBadge = badge;
         _entries = await settings.GetJsonAsync(DevicesKey, new List<AudioDeviceEntry>(), cancellationToken).ConfigureAwait(false);
         foreach (var entry in _entries)
             await LoadImageAsync(entry.ImageFileId, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>Cor de fundo ("#RRGGBB"), ou <c>null</c> para o preto padrão.</summary>
+    public string? Background { get; private set; }
+
+    public async Task SetBackgroundAsync(string? hex)
+    {
+        Background = TileColor.Normalize(hex);
+        if (Background is null)
+            await _context.Settings.RemoveAsync(BackgroundKey).ConfigureAwait(false);
+        else
+            await _context.Settings.SetAsync(BackgroundKey, Background).ConfigureAwait(false);
+        Changed?.Invoke();
+        _context.RequestRender();
+    }
+
+    /// <summary>Selo no canto dizendo se o tile troca a saída (alto-falante azul) ou a entrada (microfone laranja).</summary>
+    public bool ShowFlowBadge { get; private set; }
+
+    public Task SetShowFlowBadgeAsync(bool value) => SaveAsync(FlowBadgeKey, (ShowFlowBadge = value).ToString());
+
+    internal TileBadge? FlowBadge => !ShowFlowBadge ? null
+        : Flow == AudioFlow.Input ? new TileBadge(AudioGlyphs.ByKey("microphone")!.Glyph, InputBadgeColor)
+        : new TileBadge(AudioGlyphs.ByKey("volume")!.Glyph, OutputBadgeColor);
 
     public Task SetTitleAsync(string title) => SaveAsync(TitleKey, Title = title ?? "");
 
@@ -152,7 +184,9 @@ public sealed class AudioDeviceInstance : IWidgetInstance
     public ValueTask<WidgetFrame> RenderAsync(RenderReason reason, CancellationToken cancellationToken) =>
         ValueTask.FromResult(TileRenderer.Render(_context.PixelSize, _context.Theme, CurrentVisual()));
 
-    internal TileVisual CurrentVisual()
+    internal TileVisual CurrentVisual() => BuildVisual() with { Background = TileColor.Parse(Background), Badge = FlowBadge };
+
+    private TileVisual BuildVisual()
     {
         var compact = _context.PixelSize.Height < 100;
         var title = string.IsNullOrWhiteSpace(Title) ? null : Title;

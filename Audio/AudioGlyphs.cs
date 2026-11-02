@@ -19,6 +19,12 @@ public static class AudioGlyphs
         new("volume", "Volume", ""),
         new("bluetooth", "Bluetooth", ""),
         new("game", "Controle", ""),
+        new("music", "Música", ""),
+        new("phone", "Telefone", ""),
+        new("laptop", "Notebook", ""),
+        new("volume-high", "Volume alto", ""),
+        new("volume-low", "Volume baixo", ""),
+        new("mute", "Mudo", ""),
     ];
 
     public static GlyphOption? ByKey(string? key) =>

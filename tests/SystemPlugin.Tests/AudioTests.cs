@@ -209,3 +209,79 @@ public class AudioDeviceInstanceTests
         }
     }
 }
+
+public class TileColorTests
+{
+    [Theory]
+    [InlineData("#5865f2", "#5865F2")]
+    [InlineData("23A55A", "#23A55A")]
+    [InlineData(" #000000 ", "#000000")]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    [InlineData("#12345", null)]
+    [InlineData("azul", null)]
+    public void Normalize(string? input, string? expected) =>
+        Assert.Equal(expected, OpenWigiDash.SystemPlugin.Rendering.TileColor.Normalize(input));
+
+    [Fact]
+    public async Task AudioBackgroundIsSavedAndDrawn()
+    {
+        var context = new FakeContext(WidgetSize.Small);
+        var instance = new AudioDeviceInstance(context, new NoAudio());
+        await instance.SetBackgroundAsync("#5865f2");
+
+        var reloaded = new AudioDeviceInstance(context, new NoAudio());
+        await reloaded.LoadSettingsAsync(default);
+        Assert.Equal("#5865F2", reloaded.Background);
+        Assert.Equal(System.Drawing.Color.FromArgb(0x58, 0x65, 0xF2), reloaded.CurrentVisual().Background);
+
+        await reloaded.SetBackgroundAsync(null);
+        Assert.Null(reloaded.CurrentVisual().Background);
+    }
+
+    private sealed class NoAudio : IAudioPlatform
+    {
+        public IReadOnlyList<AudioDevice> GetDevices(AudioFlow flow) => [];
+        public string? GetDefaultId(AudioFlow flow, AudioRoles roles) => null;
+        public void SetDefault(string deviceId, AudioRoles roles) { }
+        public event Action? Changed { add { } remove { } }
+    }
+}
+
+public class FlowBadgeTests
+{
+    [Fact]
+    public async Task BadgeFollowsDirectionWhenEnabled()
+    {
+        var instance = new AudioDeviceInstance(new FakeContext(WidgetSize.Small), new SilentAudio());
+        Assert.Null(instance.CurrentVisual().Badge);
+
+        await instance.SetShowFlowBadgeAsync(true);
+        Assert.Equal(AudioDeviceInstance.OutputBadgeColor, instance.CurrentVisual().Badge!.Color);
+
+        await instance.SetFlowAsync(AudioFlow.Input);
+        Assert.Equal(AudioDeviceInstance.InputBadgeColor, instance.CurrentVisual().Badge!.Color);
+        Assert.Equal(AudioGlyphs.ByKey("microphone")!.Glyph, instance.CurrentVisual().Badge!.Glyph);
+    }
+
+    [Fact]
+    public async Task RendersWithBadgeAndBackground()
+    {
+        var context = new FakeContext(WidgetSize.Mini);
+        var instance = new AudioDeviceInstance(context, new SilentAudio());
+        await instance.SetShowFlowBadgeAsync(true);
+        await instance.SetBackgroundAsync("#5865F2");
+
+        var frame = await instance.RenderAsync(RenderReason.Initial, default);
+
+        Assert.Equal(context.PixelSize, frame.Size);
+    }
+
+    private sealed class SilentAudio : IAudioPlatform
+    {
+        public IReadOnlyList<AudioDevice> GetDevices(AudioFlow flow) => [];
+        public string? GetDefaultId(AudioFlow flow, AudioRoles roles) => null;
+        public void SetDefault(string deviceId, AudioRoles roles) { }
+        public event Action? Changed { add { } remove { } }
+    }
+}

@@ -9,6 +9,8 @@
                   Variant="Variant.Outlined" Clearable="true"
                   HelperText="Vazio = mostra o nome do dispositivo atual (no Small)." />
 
+    <BackgroundColorField Value="Instance.Background" ValueChanged="v => Instance.SetBackgroundAsync(v)" />
+
     <MudStack Row="true" Spacing="6">
         <div>
             <MudText Typo="Typo.overline" Color="Color.Secondary">Direção</MudText>
@@ -26,6 +28,10 @@
             </MudRadioGroup>
         </div>
     </MudStack>
+
+    <MudCheckBox T="bool" Value="Instance.ShowFlowBadge" ValueChanged="v => Instance.SetShowFlowBadgeAsync(v)" Color="Color.Primary">
+        Mostrar no canto se o tile troca a saída (alto-falante azul) ou a entrada (microfone laranja)
+    </MudCheckBox>
 
     <MudSelect T="DeviceMatching" Value="Instance.Matching" ValueChanged="v => Instance.SetMatchingAsync(v)"
                Label="Reconhecer o dispositivo" Variant="Variant.Outlined"
@@ -57,14 +63,7 @@
                             @(device is null ? "Não encontrado agora" : isDefault ? "Em uso agora" : device.Id == entry.Id ? "Ligado" : $"Ligado como \"{device.Name}\"")
                         </MudText>
                     </MudStack>
-                    <MudSelect T="string" Value="@(entry.Glyph ?? "")" ValueChanged="v => Instance.SetGlyphAsync(index, string.IsNullOrEmpty(v) ? null : v)"
-                               Dense="true" Variant="Variant.Outlined" Label="Ícone" Style="max-width:170px">
-                        <MudSelectItem Value="@("")">Automático</MudSelectItem>
-                        @foreach (var option in AudioGlyphs.All)
-                        {
-                            <MudSelectItem Value="@option.Key">@option.Name</MudSelectItem>
-                        }
-                    </MudSelect>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => OpenPicker(index)">Ícone…</MudButton>
                     <label class="mud-button-root mud-icon-button" title="Imagem própria" style="cursor:pointer">
                         <MudIcon Icon="@Icons.Material.Filled.Image" />
                         <InputFile OnChange="e => UploadImage(index, e)" accept="image/png,image/jpeg,image/bmp,image/gif" style="display:none" />
@@ -96,10 +95,65 @@
     }
 </MudStack>
 
+@* Seletor de ícone: janela com todos os ícones, como a biblioteca do Stream Deck. *@
+<MudOverlay Visible="@(_pickerFor is not null)" DarkBackground="true" ZIndex="1400" OnClick="ClosePicker">
+    @if (_pickerFor is { } pickIndex && pickIndex < Instance.Entries.Count)
+    {
+        var current = Instance.Entries[pickIndex];
+        <div @onclick:stopPropagation="true">
+        <MudPaper Class="pa-4" Elevation="8" Style="max-width:560px;width:90vw;max-height:80vh;overflow:auto">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+                <MudText Typo="Typo.h6" Style="flex:1">Ícone de @current.Name</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="ClosePicker" aria-label="Fechar" />
+            </MudStack>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px">
+                @{
+                    var auto = AudioGlyphs.For(null, current.Name, Instance.Flow);
+                }
+                <button type="button" style="@TileStyle(current.Glyph is null)" @onclick="() => PickGlyph(pickIndex, null)">
+                    <span style="@GlyphStyle">@auto.Glyph</span>
+                    <span style="font-size:12px">Automático</span>
+                </button>
+                @foreach (var option in AudioGlyphs.All)
+                {
+                    var key = option.Key;
+                    <button type="button" style="@TileStyle(string.Equals(current.Glyph, key, StringComparison.OrdinalIgnoreCase))"
+                            @onclick="() => PickGlyph(pickIndex, key)">
+                        <span style="@GlyphStyle">@option.Glyph</span>
+                        <span style="font-size:12px">@option.Name</span>
+                    </button>
+                }
+            </div>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-3">
+                Para usar uma imagem sua, feche e clique no botão de imagem ao lado do dispositivo.
+            </MudText>
+        </MudPaper>
+        </div>
+    }
+</MudOverlay>
+
 @code {
     private string? _toAdd;
     private string? _defaultId;
     private string? _error;
+    private int? _pickerFor;
+
+    private const string GlyphStyle = "font-family:'Segoe Fluent Icons','Segoe MDL2 Assets';font-size:34px;line-height:1.2";
+
+    private static string TileStyle(bool selected) =>
+        "display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:8px;cursor:pointer;"
+        + "background:#000;color:#fff;"
+        + (selected ? "border:3px solid var(--mud-palette-primary)" : "border:1px solid var(--mud-palette-lines-default)");
+
+    private void OpenPicker(int index) => _pickerFor = index;
+
+    private void ClosePicker() => _pickerFor = null;
+
+    private async Task PickGlyph(int index, string? key)
+    {
+        _pickerFor = null;
+        await Instance.SetGlyphAsync(index, key);
+    }
 
     private IEnumerable<AudioDevice> Available =>
         SafeDevices().Where(d => !Instance.Entries.Any(e => string.Equals(e.Id, d.Id, StringComparison.OrdinalIgnoreCase)));

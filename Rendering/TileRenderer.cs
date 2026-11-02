@@ -26,7 +26,16 @@ public sealed record TileVisual(Bitmap? Icon, string? Title, bool Running, bool 
 
     /// <summary>Bolinha preenchida; -1 = nenhuma (o padrão atual não está na lista).</summary>
     public int DotIndex { get; init; } = -1;
+
+    /// <summary>Cor de fundo escolhida; <c>null</c> = preto (ou a cor da placa do ícone, no Open Application).</summary>
+    public Color? Background { get; init; }
+
+    /// <summary>Selo no canto inferior esquerdo (ex.: alto-falante azul = saída, microfone laranja = entrada).</summary>
+    public TileBadge? Badge { get; init; }
 }
+
+/// <summary>Quadradinho colorido com um glifo da fonte de ícones do Windows.</summary>
+public sealed record TileBadge(string Glyph, Color Color);
 
 /// <summary>Quanto do tile o ícone do app ocupa.</summary>
 public enum IconFit
@@ -58,7 +67,7 @@ public static class TileRenderer
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
-            g.Clear(Background);
+            g.Clear(visual.Background ?? Background);
 
             var side = Math.Min(size.Width, size.Height);
             var iconSide = side * 0.78f;
@@ -70,7 +79,7 @@ public static class TileRenderer
                 Color? plate;
                 lock (icon)
                     plate = Analyze(icon).Plate;
-                if (visual.Fit != IconFit.Padded && !visual.Dimmed && plate is { } color)
+                if (visual.Background is null && visual.Fit != IconFit.Padded && !visual.Dimmed && plate is { } color)
                     g.Clear(color);
                 if (visual.Fit == IconFit.Padded)
                     DrawIcon(g, icon, iconRect, visual.Dimmed, cover: false, trim: false);
@@ -90,6 +99,9 @@ public static class TileRenderer
             var text = !string.IsNullOrWhiteSpace(visual.Detail) ? visual.Detail : visual.Title;
             if (!string.IsNullOrWhiteSpace(text))
                 DrawTitle(g, size, theme, text!, small: !string.IsNullOrWhiteSpace(visual.Detail));
+
+            if (visual.Badge is { } badge)
+                DrawBadge(g, size, badge);
 
             if (visual.Running)
                 DrawRunningDot(g, size);
@@ -246,6 +258,14 @@ public static class TileRenderer
         var box = new RectangleF(0, top, size.Width, Math.Max(1f, bottom - top));
         var target = Math.Min(box.Height, side * 0.80f);
 
+        var color = ToColor(theme.PrimaryForeground);
+        using var brush = new SolidBrush(dimmed ? Color.FromArgb(110, color) : color);
+        FillGlyph(g, glyph, box, target, brush);
+    }
+
+    /// <summary>Glifo centrado em <paramref name="box"/>, com o maior lado do desenho igual a <paramref name="target"/>.</summary>
+    private static void FillGlyph(Graphics g, string glyph, RectangleF box, float target, Brush brush)
+    {
         using var path = new GraphicsPath();
         using (var family = new FontFamily(IconFont))
             path.AddString(glyph, family, (int)FontStyle.Regular, 100f, PointF.Empty, StringFormat.GenericTypographic);
@@ -258,10 +278,31 @@ public static class TileRenderer
         matrix.Scale(scale, scale);
         matrix.Translate(-(bounds.X + bounds.Width / 2f), -(bounds.Y + bounds.Height / 2f));
         path.Transform(matrix);
-
-        var color = ToColor(theme.PrimaryForeground);
-        using var brush = new SolidBrush(dimmed ? Color.FromArgb(110, color) : color);
         g.FillPath(brush, path);
+    }
+
+    private static void DrawBadge(Graphics g, PixelSize size, TileBadge badge)
+    {
+        var side = Math.Min(size.Width, size.Height);
+        var d = Math.Max(14f, side * 0.26f);
+        var margin = Math.Max(3f, side * 0.06f);
+        var rect = new RectangleF(margin, size.Height - d - margin, d, d);
+        using (var shape = RoundedRect(rect, d * 0.25f))
+        using (var fill = new SolidBrush(badge.Color))
+            g.FillPath(fill, shape);
+        FillGlyph(g, badge.Glyph, rect, d * 0.62f, Brushes.White);
+    }
+
+    private static GraphicsPath RoundedRect(RectangleF r, float radius)
+    {
+        var path = new GraphicsPath();
+        var dia = radius * 2;
+        path.AddArc(r.X, r.Y, dia, dia, 180, 90);
+        path.AddArc(r.Right - dia, r.Y, dia, dia, 270, 90);
+        path.AddArc(r.Right - dia, r.Bottom - dia, dia, dia, 0, 90);
+        path.AddArc(r.X, r.Bottom - dia, dia, dia, 90, 90);
+        path.CloseFigure();
+        return path;
     }
 
     /// <summary>Uma bolinha por item do carrossel, no topo; a do dispositivo atual preenchida.</summary>

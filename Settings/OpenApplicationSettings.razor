@@ -10,6 +10,18 @@
                   HelperText="Texto embaixo do ícone. Vazio = só o ícone." />
 
     <MudStack Row="true" AlignItems="AlignItems.Center">
+        @if (Instance.App is { } chosen)
+        {
+            @* Ícone do app escolhido ao lado do nome. *@
+            @if (IconFor(chosen) is { } chosenIcon)
+            {
+                <img src="@chosenIcon" width="40" height="40" alt="" style="flex:none" />
+            }
+            else
+            {
+                <span style="display:inline-block;width:40px;height:40px;flex:none"></span>
+            }
+        }
         <MudAutocomplete T="AppChoice" Value="Instance.App" ValueChanged="SelectApp" Label="App"
                          Variant="Variant.Outlined" SearchFunc="Search" ToStringFunc="@(a => a?.Name)"
                          MaxItems="null" ResetValueOnEmptyText="false" Clearable="true"
@@ -38,6 +50,9 @@
         <MudSelectItem Value="IconFit.Cover">Cobrir o tile todo (corta as bordas no Mini)</MudSelectItem>
         <MudSelectItem Value="IconFit.Padded">Com margem</MudSelectItem>
     </MudSelect>
+
+    <BackgroundColorField Value="Instance.Background" ValueChanged="v => Instance.SetBackgroundAsync(v)"
+                          HelperText="Padrão = preto, ou a cor da placa do ícone (ex.: verde do Xbox)." />
 
     <MudSelect T="LongPressAction" Value="Instance.LongPress" ValueChanged="v => Instance.SetLongPressAsync(v)"
                Label="Long press" Variant="Variant.Outlined">
