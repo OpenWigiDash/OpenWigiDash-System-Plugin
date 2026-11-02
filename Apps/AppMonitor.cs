@@ -50,6 +50,9 @@ internal sealed class AppWatch : IDisposable
     internal bool ResolveRequested { get; set; } = true;
     internal DateTime ResolvedAt { get; set; }
 
+    /// <summary>Alvo já registrado no log como "fechado com processo na pasta" (uma vez por alvo).</summary>
+    internal AppTarget? LoggedMiss { get; set; }
+
     /// <summary>
     /// Mudou o alvo ou o estado (abriu, fechou). <c>opened</c> = acabou de abrir: bom momento para recarregar o
     /// ícone, porque uma atualização do app costuma terminar assim.
@@ -183,8 +186,19 @@ internal sealed class AppMonitor
             var before = watch.State;
             var after = snapshot.StateOf(watch.Target);
             watch.State = after;
+            if (!after.IsRunning && watch.Target is { InstallDirectory: { } dir } target && watch.LoggedMiss != target)
+            {
+                // Diagnóstico: fechado, mas há processo na pasta do app (deveria ter casado?).
+                watch.LoggedMiss = target;
+                var near = snapshot.Processes.Where(p => p.Path?.StartsWith(dir, StringComparison.OrdinalIgnoreCase) == true).ToList();
+                if (near.Count > 0)
+                    _logger?.LogInformation("App {App} fechado, mas há processos na pasta {Directory}: {Processes}.",
+                        watch.App?.Id, dir, string.Join(", ", near.Select(p => p.Path)));
+            }
             if (before.IsRunning != after.IsRunning)
             {
+                _logger?.LogInformation("App {App}: {State} ({Processes}).", watch.App?.Id, after.IsRunning ? "aberto" : "fechado",
+                    string.Join(", ", after.Processes.Select(p => p.Path ?? p.Name)));
                 if (after.IsRunning)
                     watch.ResolveRequested = true; // abriu: pode ter sido atualizado, confere o alvo de novo
                 watch.RaiseChanged(after.IsRunning);
