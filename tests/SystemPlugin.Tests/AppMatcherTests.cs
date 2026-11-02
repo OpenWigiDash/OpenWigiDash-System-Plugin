@@ -22,6 +22,18 @@ public class AppMatcherTests
         Assert.False(AppMatcher.IsMatch(DiscordTarget, new ProcessInfo(1, "Discord", @"C:\Outro\Discord.exe", null)));
 
     [Fact]
+    public void SquirrelStubWithoutProcessStartMatchesVersionFolder()
+    {
+        // Discord atual: o atalho do Iniciar aponta para ...\Discord\Discord.exe, sem Update.exe nem argumentos.
+        var target = AppTarget.Build("com.squirrel.Discord.Discord", "Discord", "com.squirrel.Discord.Discord",
+            Discord + @"\Discord.exe", null, _ => null);
+
+        Assert.True(AppMatcher.IsMatch(target, new ProcessInfo(1, "Discord", Discord + @"\app-1.0.9266\Discord.exe", null)));
+        Assert.False(AppMatcher.IsMatch(target, new ProcessInfo(2, "Discord", Discord + @"\outra\Discord.exe", null)));
+        Assert.False(AppMatcher.IsMatch(target, new ProcessInfo(3, "Updater", Discord + @"\app-1.0.9266\Updater.exe", null)));
+    }
+
+    [Fact]
     public void LauncherMatchesSiblingProcess()
     {
         var ea = new AppTarget("EA", "EA", false, null, @"C:\Program Files\Electronic Arts\EA Desktop\EA Desktop\EALauncher.exe",

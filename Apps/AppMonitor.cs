@@ -170,6 +170,8 @@ internal sealed class AppMonitor
             watch.ResolvedAt = now;
             if (target != watch.Target && ReferenceEquals(app, watch.App))
             {
+                _logger?.LogInformation("App {App}: aumid={Aumid}, exe={Exe}, processo={Process}, pasta={Directory}, store={Packaged}.",
+                    app.Id, target?.Aumid, target?.ExePath, target?.ProcessName, target?.InstallDirectory, target?.IsPackaged);
                 watch.Target = target;
                 watch.RaiseChanged(false);
             }

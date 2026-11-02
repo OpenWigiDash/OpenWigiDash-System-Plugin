@@ -31,8 +31,18 @@ public static class AppMatcher
                 && process.Path.StartsWith(target.InstallDirectory + "\\", StringComparison.OrdinalIgnoreCase);
         }
 
+        var processDirectory = Path.GetDirectoryName(process.Path);
+
+        // Squirrel novo: o atalho abre ...\Discord\Discord.exe (um stub, sem --processStart), e o que roda é
+        // ...\Discord\app-1.0.9266\Discord.exe.
+        if (string.Equals(process.Name, target.ProcessName, StringComparison.OrdinalIgnoreCase)
+            && processDirectory is not null
+            && string.Equals(Path.GetDirectoryName(processDirectory), target.InstallDirectory, StringComparison.OrdinalIgnoreCase)
+            && Path.GetFileName(processDirectory).StartsWith("app-", StringComparison.OrdinalIgnoreCase))
+            return true;
+
         // Launcher que abre outro exe na mesma pasta (EA app: EALauncher.exe abre EADesktop.exe).
-        return string.Equals(Path.GetDirectoryName(process.Path), target.InstallDirectory, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(processDirectory, target.InstallDirectory, StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IsMatch(AppTarget target, WindowInfo window) =>
