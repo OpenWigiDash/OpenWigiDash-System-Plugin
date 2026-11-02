@@ -30,6 +30,10 @@ Opções:
 
 - **Título**: texto embaixo do ícone (vazio = só o ícone).
 - **App**: busca pelo nome, com ícone.
+- **Ícone do PC**: troca o ícone do app por uma imagem (.png, .jpg, .bmp, .gif) ou pelo ícone de um .ico, .exe ou
+  .dll. O arquivo é copiado para o widget, então pode ser apagado depois. "Usar o ícone do app" volta ao padrão.
+  Serve para apps que só trazem ícone pequeno: o PresentMon da Intel, por exemplo, vai só até 48 px e fica borrado
+  quando ampliado no tile.
 - **Long press**: não fazer nada, fechar o app (como clicar no X) ou forçar o fechamento.
 - **Trazer para a frente se já estiver aberto**: desligado, o toque sempre abre de novo.
 

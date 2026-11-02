@@ -1,3 +1,4 @@
+using System.Drawing;
 using Microsoft.Extensions.Logging;
 using OpenWigi.Sdk;
 using OpenWigiDash.SystemPlugin.Apps;
@@ -15,6 +16,7 @@ public sealed class OpenApplicationInstance : IWidgetInstance
     internal const string BringToFrontKey = "bringToFront";
     internal const string IconFitKey = "iconFit";
     internal const string BackgroundKey = "background";
+    internal const string CustomIconKey = "customIcon";
 
     /// <summary>Quanto o toque espera o monitor conferir se o app está aberto antes de decidir.</summary>
     private static readonly TimeSpan RefreshWait = TimeSpan.FromMilliseconds(400);
@@ -61,6 +63,8 @@ public sealed class OpenApplicationInstance : IWidgetInstance
         if (Enum.TryParse<IconFit>(await settings.GetAsync(IconFitKey, cancellationToken).ConfigureAwait(false), out var fit))
             IconFit = fit;
         Background = TileColor.Normalize(await settings.GetAsync(BackgroundKey, cancellationToken).ConfigureAwait(false));
+        CustomIconFileId = await settings.GetAsync(CustomIconKey, cancellationToken).ConfigureAwait(false);
+        await LoadCustomIconAsync(cancellationToken).ConfigureAwait(false);
 
         if (App is not null)
         {
@@ -127,6 +131,80 @@ public sealed class OpenApplicationInstance : IWidgetInstance
         _context.RequestRender();
     }
 
+    /// <summary>Id do arquivo do ícone próprio, ou <c>null</c> para usar o ícone do app.</summary>
+    public string? CustomIconFileId { get; private set; }
+
+    /// <summary>Ícone próprio carregado (o PNG guardado nos arquivos da instância).</summary>
+    public Bitmap? CustomIcon { get; private set; }
+
+    /// <summary>O ícone próprio em PNG data URL, para a tela de configurações.</summary>
+    public string? CustomIconDataUrl { get; private set; }
+
+    /// <summary>
+    /// Usa um ícone escolhido pela pessoa (imagem, .ico, .exe ou .dll) no lugar do ícone do app. O arquivo é convertido
+    /// para PNG e copiado para os arquivos da instância, então pode ser apagado ou mudar de lugar depois.
+    /// </summary>
+    public async Task SetCustomIconAsync(string sourcePath)
+    {
+        var png = Path.Combine(Path.GetTempPath(), "openwigidash-icon-" + Guid.NewGuid().ToString("N") + ".png");
+        try
+        {
+            await Task.Run(() => CustomIconFile.SaveAsPng(sourcePath, png)).ConfigureAwait(false);
+            var previous = CustomIconFileId;
+            var fileId = "icon-" + Guid.NewGuid().ToString("N");
+            await _context.Files.ImportAsync(fileId, png).ConfigureAwait(false);
+            CustomIconFileId = fileId;
+            await LoadCustomIconAsync(default).ConfigureAwait(false);
+            await _context.Settings.SetAsync(CustomIconKey, fileId).ConfigureAwait(false);
+            if (previous is not null)
+                await _context.Files.DeleteAsync(previous).ConfigureAwait(false);
+        }
+        finally
+        {
+            try { File.Delete(png); } catch (IOException) { }
+        }
+        Changed?.Invoke();
+        _context.RequestRender();
+    }
+
+    /// <summary>Volta a usar o ícone do app.</summary>
+    public async Task ClearCustomIconAsync()
+    {
+        if (CustomIconFileId is not { } fileId)
+            return;
+        CustomIconFileId = null;
+        CustomIcon = null;
+        CustomIconDataUrl = null;
+        await _context.Settings.RemoveAsync(CustomIconKey).ConfigureAwait(false);
+        await _context.Files.DeleteAsync(fileId).ConfigureAwait(false);
+        Changed?.Invoke();
+        _context.RequestRender();
+    }
+
+    private async Task LoadCustomIconAsync(CancellationToken cancellationToken)
+    {
+        if (CustomIconFileId is not { } fileId)
+            return;
+        try
+        {
+            if (await _context.Files.GetPathAsync(fileId, cancellationToken).ConfigureAwait(false) is not { } path || !File.Exists(path))
+            {
+                _context.Logger.LogWarning("O ícone próprio do Open Application sumiu; usando o ícone do app.");
+                return;
+            }
+            var bytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
+            using var stream = new MemoryStream(bytes);
+            using var loaded = new Bitmap(stream);
+            // O antigo não é descartado: um quadro em andamento pode estar desenhando com ele.
+            CustomIcon = new Bitmap(loaded);
+            CustomIconDataUrl = "data:image/png;base64," + Convert.ToBase64String(bytes);
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            _context.Logger.LogWarning(ex, "O ícone próprio do Open Application não pôde ser lido.");
+        }
+    }
+
     public ValueTask<WidgetFrame> RenderAsync(RenderReason reason, CancellationToken cancellationToken) =>
         ValueTask.FromResult(TileRenderer.Render(_context.PixelSize, _context.Theme, CurrentVisual()));
 
@@ -136,11 +214,11 @@ public sealed class OpenApplicationInstance : IWidgetInstance
         {
             // No Mini não cabe aviso; o desenho padrão já diz que falta escolher.
             var compact = _context.PixelSize.Height < 100;
-            return new TileVisual(null, NullIfEmpty(Title), false, Detail: compact ? null : "Escolha um app")
-                { Background = TileColor.Parse(Background) };
+            return new TileVisual(CustomIcon, NullIfEmpty(Title), false, Detail: compact ? null : "Escolha um app")
+                { Fit = IconFit, Background = TileColor.Parse(Background) };
         }
         var missing = IsMissing;
-        return new TileVisual(_platform.PeekIcon(App.Id), NullIfEmpty(Title), _watch.State.IsRunning, missing,
+        return new TileVisual(CustomIcon ?? _platform.PeekIcon(App.Id), NullIfEmpty(Title), _watch.State.IsRunning, missing,
             missing ? "Não encontrado" : null) { Fit = IconFit, Background = TileColor.Parse(Background) };
     }
 
@@ -187,6 +265,12 @@ public sealed class OpenApplicationInstance : IWidgetInstance
         if (App is not null)
             ReloadIcon(refresh: true);
         return ValueTask.CompletedTask;
+    }
+
+    public async ValueTask OnRemovedAsync(CancellationToken cancellationToken)
+    {
+        if (CustomIconFileId is { } fileId)
+            await _context.Files.DeleteAsync(fileId, cancellationToken).ConfigureAwait(false);
     }
 
     public ValueTask DisposeAsync()

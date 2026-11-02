@@ -20,7 +20,7 @@ internal sealed class FakeContext(WidgetSize size) : IWidgetContext
     public bool IsAsleep => false;
     public WidgetTheme Theme { get; } = new();
     public IWidgetSettings Settings { get; } = new MemorySettings();
-    public IWidgetFiles Files => throw new NotSupportedException();
+    public IWidgetFiles Files { get; } = new TempFiles();
     public IWidgetActions Actions => throw new NotSupportedException();
     public ILogger Logger => NullLogger.Instance;
     public CancellationToken Stopping => CancellationToken.None;
@@ -37,6 +37,45 @@ internal sealed class FakeContext(WidgetSize size) : IWidgetContext
         public ILoggerFactory LoggerFactory => NullLoggerFactory.Instance;
         public TimeProvider Time => TimeProvider.System;
         public WidgetTheme Theme { get; } = new();
+    }
+
+    /// <summary>Arquivos da instância numa pasta temporária.</summary>
+    internal sealed class TempFiles : IWidgetFiles
+    {
+        public string Directory { get; } = Path.Combine(Path.GetTempPath(), "owd-tests-" + Guid.NewGuid().ToString("N"));
+
+        public ValueTask<string> ImportAsync(string fileId, string sourcePath, CancellationToken cancellationToken = default)
+        {
+            System.IO.Directory.CreateDirectory(Directory);
+            var path = Path.Combine(Directory, fileId + Path.GetExtension(sourcePath));
+            File.Copy(sourcePath, path, overwrite: true);
+            return ValueTask.FromResult(path);
+        }
+
+        public ValueTask<string> CreateAsync(string fileId, string fileName, CancellationToken cancellationToken = default)
+        {
+            System.IO.Directory.CreateDirectory(Directory);
+            return ValueTask.FromResult(Path.Combine(Directory, fileId + Path.GetExtension(fileName)));
+        }
+
+        public ValueTask<string?> GetPathAsync(string fileId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(System.IO.Directory.Exists(Directory)
+                ? System.IO.Directory.GetFiles(Directory, fileId + ".*").FirstOrDefault()
+                : null);
+
+        public ValueTask<bool> DeleteAsync(string fileId, CancellationToken cancellationToken = default)
+        {
+            var found = false;
+            if (System.IO.Directory.Exists(Directory))
+            {
+                foreach (var file in System.IO.Directory.GetFiles(Directory, fileId + ".*"))
+                {
+                    File.Delete(file);
+                    found = true;
+                }
+            }
+            return ValueTask.FromResult(found);
+        }
     }
 
     private sealed class MemorySettings : IWidgetSettings

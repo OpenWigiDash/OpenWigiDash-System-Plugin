@@ -1,4 +1,5 @@
 @using OpenWigiDash.SystemPlugin.Apps
+@using Microsoft.AspNetCore.Components.Forms
 @using OpenWigiDash.SystemPlugin.Rendering
 @inherits WidgetSettingsComponent<OpenApplicationInstance>
 @implements IDisposable
@@ -13,7 +14,7 @@
         @if (Instance.App is { } chosen)
         {
             @* Ícone do app escolhido ao lado do nome. *@
-            @if (IconFor(chosen) is { } chosenIcon)
+            @if ((Instance.CustomIconDataUrl ?? IconFor(chosen)) is { } chosenIcon)
             {
                 <img src="@chosenIcon" width="40" height="40" alt="" style="flex:none" />
             }
@@ -42,6 +43,30 @@
             </ItemTemplate>
         </MudAutocomplete>
         <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="ReloadApps" aria-label="Ler a lista de apps de novo" />
+    </MudStack>
+
+    <MudStack Spacing="1">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            @if (Instance.CustomIconDataUrl is { } custom)
+            {
+                <img src="@custom" width="40" height="40" alt="" style="flex:none;object-fit:contain" />
+            }
+            <label class="mud-button-root mud-button mud-button-outlined mud-button-outlined-default mud-button-outlined-size-medium" style="cursor:pointer">
+                <span class="mud-button-label">@(Instance.CustomIconFileId is null ? "Escolher ícone do PC…" : "Trocar ícone…")</span>
+                <InputFile OnChange="UploadIcon" accept="@CustomIconFile.Accept" style="display:none" />
+            </label>
+            @if (Instance.CustomIconFileId is not null)
+            {
+                <MudButton Variant="Variant.Text" OnClick="ClearIcon">Usar o ícone do app</MudButton>
+            }
+            @if (_iconBusy)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+            }
+        </MudStack>
+        <MudText Typo="Typo.caption" Color="@(_iconError is null ? Color.Secondary : Color.Error)">
+            @(_iconError ?? "Imagem (.png, .jpg, .bmp, .gif) ou o ícone de um .ico, .exe ou .dll. Fica no lugar do ícone do app.")
+        </MudText>
     </MudStack>
 
     <MudSelect T="IconFit" Value="Instance.IconFit" ValueChanged="v => Instance.SetIconFitAsync(v)"
@@ -140,6 +165,47 @@
     }
 
     private Task SelectApp(AppChoice? app) => Instance.SetAppAsync(app);
+
+    private bool _iconBusy;
+    private string? _iconError;
+
+    /// <summary>Um .exe pode ser grande; o que importa dele é só o ícone.</summary>
+    private const long MaxIconFileSize = 256L * 1024 * 1024;
+
+    private async Task UploadIcon(InputFileChangeEventArgs e)
+    {
+        _iconError = null;
+        if (e.File.Size > MaxIconFileSize)
+        {
+            _iconError = "Arquivo grande demais (máximo 256 MB). Para um jogo, escolha um .ico ou uma imagem.";
+            return;
+        }
+        _iconBusy = true;
+        // Mantém a extensão: é por ela que se sabe se é imagem ou arquivo com ícone (.ico, .exe, .dll).
+        var temp = Path.Combine(Path.GetTempPath(), "openwigidash-" + Guid.NewGuid().ToString("N") + Path.GetExtension(e.File.Name));
+        try
+        {
+            await using (var target = File.Create(temp))
+            await using (var source = e.File.OpenReadStream(maxAllowedSize: MaxIconFileSize))
+                await source.CopyToAsync(target);
+            await Instance.SetCustomIconAsync(temp);
+        }
+        catch (Exception ex)
+        {
+            _iconError = "Não deu para usar esse arquivo: " + ex.Message;
+        }
+        finally
+        {
+            _iconBusy = false;
+            try { File.Delete(temp); } catch (IOException) { }
+        }
+    }
+
+    private async Task ClearIcon()
+    {
+        _iconError = null;
+        await Instance.ClearCustomIconAsync();
+    }
 
     /// <summary>Ícone já carregado, ou <c>null</c> e pede (as linhas visíveis passam na frente da pré-carga).</summary>
     private string? IconFor(AppChoice app)

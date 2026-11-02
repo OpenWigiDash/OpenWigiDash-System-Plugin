@@ -159,6 +159,14 @@ public static class TileRenderer
             return Analyze(icon).Bounds;
     }
 
+    /// <summary>
+    /// Pixels mais transparentes que isso não contam como desenho. Quando o exe só tem ícones pequenos (o PresentMon da
+    /// Intel vai até 48 px), o shell devolve o ícone pequeno no meio de um quadro de 256 px com uma moldura fraca
+    /// (alfa 26 a 77) encostada na borda. Contando a moldura, o recorte pegava o quadro inteiro e o ícone ficava
+    /// minúsculo no tile. Sombras e bordas suavizadas de ícones normais ficam abaixo disso e não fazem falta no recorte.
+    /// </summary>
+    private const byte FaintAlpha = 96;
+
     private static IconInfo Measure(Bitmap bitmap)
     {
         var full = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
@@ -181,7 +189,7 @@ public static class TileRenderer
         {
             for (var x = 0; x < bitmap.Width; x++)
             {
-                if (pixels[y * stride + x * 4 + 3] <= 16)
+                if (pixels[y * stride + x * 4 + 3] < FaintAlpha)
                     continue;
                 if (x < left) left = x;
                 if (x > right) right = x;
