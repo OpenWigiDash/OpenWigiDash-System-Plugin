@@ -196,3 +196,15 @@ Sem pacote NuGet novo: PDH, D3DKMT e IP Helper são P/Invoke direto nas DLLs do 
 5. Os seis estilos de gráfico, os temas prontos e o alerta; prévia na tela de opções acompanha.
 6. Trocar de página e voltar: o gráfico continua cheio. Tela em repouso: o uso de CPU do Manager cai (coletor para).
 7. Toque abre o Gerenciador de Tarefas.
+
+## Temperatura do CPU: segundo teste e decisão (2/11/2026)
+
+No PC do Victor (Gigabyte B450M AORUS ELITE, Ryzen 7 5700X), sem admin:
+
+- WMI da Gigabyte (`GSA1_ACPIMethod`, tem `ZFCGetCurrentTemp`) e da AMD (`AMD_ACPI`): acesso negado.
+- Zona térmica ACPI: 16,9 °C fixo (falso). `MSAcpi_ThermalZoneTemperature`: acesso negado.
+- PawnIO instalado, mas o dispositivo só abre como admin.
+- Só o servidor web do LibreHardwareMonitor (`localhost:8085/data.json`, rodando elevado) entrega o Tctl a um
+  usuário comum: 62–64 °C parado, até 78 °C com carga.
+
+Decisão do Victor: **sem temperatura do CPU** no System Info, para não depender de programa de terceiros.
