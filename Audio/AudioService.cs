@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
+using OpenWigiDash.SystemPlugin.Apps;
 
 namespace OpenWigiDash.SystemPlugin.Audio;
 
@@ -130,29 +131,69 @@ internal sealed class AudioService : IAudioPlatform
         }
     }
 
+    /// <summary>
+    /// Troca o padrão numa thread STA própria (como o EarTrumpet e o SoundSwitch fazem, da thread de UI): chamada da
+    /// thread do pool, dentro do Manager, o Windows devolvia E_FAIL. Se a interface nova recusar, tenta a antiga.
+    /// </summary>
     public void SetDefault(string deviceId, AudioRoles roles)
     {
-        var policy = (CoreAudio.IPolicyConfig)new CoreAudio.PolicyConfigClient();
+        var errors = Sta.RunAsync(() => SetDefaultCore(deviceId, roles)).GetAwaiter().GetResult();
+        Invalidate();
+        if (errors.Count > 0)
+            throw new COMException($"O Windows recusou trocar o dispositivo padrão ({string.Join(", ", errors)}).", errors[0].Hr);
+    }
+
+    private readonly record struct RoleError(CoreAudio.ERole Role, int Hr)
+    {
+        public override string ToString() => $"{Role}: 0x{Hr:X8}";
+    }
+
+    private List<RoleError> SetDefaultCore(string deviceId, AudioRoles roles)
+    {
+        var wanted = new List<CoreAudio.ERole>();
+        if (roles is AudioRoles.Default or AudioRoles.Both)
+            wanted.AddRange([CoreAudio.ERole.Console, CoreAudio.ERole.Multimedia]);
+        if (roles is AudioRoles.Communications or AudioRoles.Both)
+            wanted.Add(CoreAudio.ERole.Communications);
+
+        var errors = new List<RoleError>();
+        object? policy = null, vista = null;
         try
         {
-            if (roles is AudioRoles.Default or AudioRoles.Both)
+            policy = new CoreAudio.PolicyConfigClient();
+            foreach (var role in wanted)
             {
-                Check(policy.SetDefaultEndpoint(deviceId, CoreAudio.ERole.Console));
-                Check(policy.SetDefaultEndpoint(deviceId, CoreAudio.ERole.Multimedia));
+                var hr = ((CoreAudio.IPolicyConfig)policy).SetDefaultEndpoint(deviceId, role);
+                if (hr != 0)
+                {
+                    _logger?.LogWarning("IPolicyConfig recusou {Role} para {Id} (0x{Hr:X8}); tentando a interface antiga.", role, deviceId, hr);
+                    vista ??= TryCreateVista();
+                    if (vista is CoreAudio.IPolicyConfigVista old)
+                        hr = old.SetDefaultEndpoint(deviceId, role);
+                }
+                if (hr != 0)
+                    errors.Add(new RoleError(role, hr));
             }
-            if (roles is AudioRoles.Communications or AudioRoles.Both)
-                Check(policy.SetDefaultEndpoint(deviceId, CoreAudio.ERole.Communications));
         }
         finally
         {
-            Marshal.ReleaseComObject(policy);
+            if (policy is not null)
+                Marshal.ReleaseComObject(policy);
+            if (vista is not null)
+                Marshal.ReleaseComObject(vista);
         }
-        Invalidate();
+        return errors;
+    }
 
-        static void Check(int hr)
+    private static object? TryCreateVista()
+    {
+        try
         {
-            if (hr != 0)
-                Marshal.ThrowExceptionForHR(hr);
+            return new CoreAudio.PolicyConfigVistaClient();
+        }
+        catch (COMException)
+        {
+            return null;
         }
     }
 
