@@ -284,7 +284,7 @@ public static class TileRenderer
     private static void DrawBadge(Graphics g, PixelSize size, TileBadge badge)
     {
         var side = Math.Min(size.Width, size.Height);
-        var d = Math.Max(14f, side * 0.26f);
+        var d = Math.Max(16f, side * 0.30f); // 15% maior que o primeiro desenho, a pedido
         var margin = Math.Max(3f, side * 0.06f);
         var rect = new RectangleF(margin, size.Height - d - margin, d, d);
         using (var shape = RoundedRect(rect, d * 0.25f))
