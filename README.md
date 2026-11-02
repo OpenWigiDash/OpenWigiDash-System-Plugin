@@ -12,7 +12,7 @@ plugin "System" do Stream Deck.
 | Audio Device | Troca a placa de som padrão do Windows (saída ou entrada). Cada toque passa para o próximo de uma lista (carrossel), long-press volta para o primeiro |
 | System Info | Uma métrica do PC (CPU, GPU, RAM, VRAM, rede, disco, ping) com o valor grande e um minigráfico em tempo real, como o System Vitals do Stream Deck. Sem programa de terceiros |
 
-Tamanhos: Mini (meia célula) e Small (o 1x1 da grade antiga). O System Info usa Small, Wide e Large.
+Tamanhos: Mini (meia célula) e Small (o 1x1 da grade antiga). O System Info também tem Wide e Large.
 
 Próximos: os outros do System do Stream Deck (Website, Hotkey, Text, Multimedia). Ver [docs/PLANO.md](docs/PLANO.md).
 

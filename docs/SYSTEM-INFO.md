@@ -131,8 +131,8 @@ A definir com o Victor; não é o que importa no widget.
 ### Tamanhos
 
 `Small` (2x2, 198x143) como padrão, que é o equivalente do botão do Stream Deck com mais espaço; `Wide` (4x2) com
-o gráfico mais longo (mais histórico); `Large` (4x4) dá para depois. Sem `Mini`: o SDK recomenda não pôr número
-e texto em 97x69.
+o gráfico mais longo (mais histórico); `Large` (4x4). `Mini` (1x1, 97x69) também, a pedido do Victor, mesmo o SDK
+recomendando não pôr número e texto nesse tamanho: o desenho é proporcional à altura e o texto encolhe até caber.
 
 ### Desenho
 

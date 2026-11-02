@@ -304,7 +304,7 @@ public class SystemInfoRenderTests
     public static TheoryData<int, int> Sizes()
     {
         var data = new TheoryData<int, int>();
-        foreach (var size in new[] { WidgetSize.Small, WidgetSize.Wide, WidgetSize.Large })
+        foreach (var size in new[] { WidgetSize.Mini, WidgetSize.Small, WidgetSize.Wide, WidgetSize.Large })
         {
             foreach (var inset in TileFrame.InsetOptions)
             {

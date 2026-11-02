@@ -24,7 +24,7 @@ public sealed class SystemInfoWidget : IWidget
         Author = "Victor Perez",
         Website = OpenApplicationWidget.Website,
         Description = "Uma métrica do PC (CPU, GPU, RAM, VRAM, rede, disco, ping) com minigráfico em tempo real.",
-        SupportedSizes = [WidgetSize.Small, WidgetSize.Wide, WidgetSize.Large],
+        SupportedSizes = [WidgetSize.Mini, WidgetSize.Small, WidgetSize.Wide, WidgetSize.Large],
     };
 
     public ValueTask LoadAsync(IWidgetHost host, CancellationToken cancellationToken)
