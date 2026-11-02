@@ -5,11 +5,11 @@
 
 @* Placa de som: os campos do "Toggle Audio Device" do Stream Deck, com lista (carrossel) no lugar de primário e secundário. *@
 <MudStack Spacing="4">
-    <MudTextField T="string" Value="Instance.Title" ValueChanged="v => Instance.SetTitleAsync(v)" Label="Título"
+    <MudTextField T="string" Value="@Instance.Title" ValueChanged="v => Instance.SetTitleAsync(v)" Label="Título"
                   Variant="Variant.Outlined" Clearable="true"
                   HelperText="Vazio = mostra o nome do dispositivo atual (no Small)." />
 
-    <BackgroundColorField Value="Instance.Background" ValueChanged="v => Instance.SetBackgroundAsync(v)" />
+    <BackgroundColorField Value="@Instance.Background" ValueChanged="v => Instance.SetBackgroundAsync(v)" />
 
     <MudStack Row="true" Spacing="6">
         <div>
