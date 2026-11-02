@@ -1,0 +1,297 @@
+@using System.Drawing.Imaging
+@using OpenWigiDash.SystemPlugin.Metrics
+@using OpenWigiDash.SystemPlugin.Rendering
+@inherits WidgetSettingsComponent<SystemInfoInstance>
+@implements IDisposable
+
+@* System Info: as opções do System Vitals do Stream Deck, com campos normais no lugar do SVG. *@
+<MudStack Spacing="4">
+    <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="4" Wrap="Wrap.Wrap">
+        @if (_preview is not null)
+        {
+            <img src="@_preview" alt="Prévia" style="border-radius:8px;width:198px;height:143px;flex:none" />
+        }
+        <MudStack Spacing="2" Style="flex:1;min-width:280px">
+            <MudSelect T="MetricKind" Value="C.Metric" ValueChanged="v => Instance.SetMetricAsync(v)" Label="Monitor" Variant="Variant.Outlined">
+                @foreach (var group in MetricCatalog.All.GroupBy(m => m.Group))
+                {
+                    <MudListSubheader>@MetricCatalog.GroupName(group.Key)</MudListSubheader>
+                    @foreach (var metric in group)
+                    {
+                        var available = IsAvailable(metric.Kind);
+                        <MudSelectItem Value="@metric.Kind" Disabled="@(!available && metric.Kind != C.Metric)">
+                            @metric.Label@(available ? "" : " (não disponível neste PC)")
+                        </MudSelectItem>
+                    }
+                }
+            </MudSelect>
+
+            @if (!IsAvailable(C.Metric))
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">@Unavailable(C.Metric)</MudAlert>
+            }
+
+            @if (C.Metric == MetricKind.Ping)
+            {
+                <MudAutocomplete T="string" Value="C.Device" ValueChanged="v => Save(C with { Device = string.IsNullOrWhiteSpace(v) ? null : v.Trim() })"
+                                 SearchFunc="SearchHosts" CoerceValue="true" Label="Host" Variant="Variant.Outlined"
+                                 HelperText="Google (8.8.8.8), Cloudflare (1.1.1.1) ou um IP/nome seu." />
+            }
+            else if (MetricCatalog.Get(C.Metric).NeedsDevice)
+            {
+                <MudSelect T="string" Value="C.Device" ValueChanged="v => Save(C with { Device = v })" Label="Dispositivo" Variant="Variant.Outlined"
+                           Clearable="true">
+                    <MudSelectItem T="string" Value="@((string?)null)">@DefaultDevice(C.Metric)</MudSelectItem>
+                    @foreach (var device in Devices(C.Metric))
+                    {
+                        <MudSelectItem T="string" Value="@device.Id">@device.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+
+            @if (C.Metric is MetricKind.NetworkDown or MetricKind.NetworkUp)
+            {
+                <MudRadioGroup T="NetworkUnit" Value="C.NetworkUnit" ValueChanged="v => Save(C with { NetworkUnit = v })">
+                    <MudRadio Value="NetworkUnit.MegabytesPerSecond" Color="Color.Primary">MB/s</MudRadio>
+                    <MudRadio Value="NetworkUnit.MegabitsPerSecond" Color="Color.Primary">Mbps</MudRadio>
+                </MudRadioGroup>
+            }
+        </MudStack>
+    </MudStack>
+
+    <div>
+        <MudText Typo="Typo.overline" Color="Color.Secondary">Atualizar a cada @((C.Interval.TotalMilliseconds / 1000).ToString("0.0")) s</MudText>
+        <MudSlider T="int" Value="C.IntervalMs" ValueChanged="v => Save(C with { IntervalMs = v })" Min="500" Max="10000" Step="500" Color="Color.Primary" />
+    </div>
+
+    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap">
+        <MudTextField T="string" Value="@(C.Title ?? AutoTitle)" ValueChanged="SetTitle"
+                      Label="Título" Variant="Variant.Outlined" Style="min-width:200px" HelperText="Vazio = sem título." />
+        <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@(C.Title is null)" OnClick="() => Save(C with { Title = null })">Automático</MudButton>
+        @if (!MetricCatalog.Get(C.Metric).IsPercent)
+        {
+            <MudNumericField T="double?" Value="C.Max" ValueChanged="v => Save(C with { Max = v })" Label="Máximo do gráfico"
+                             Variant="Variant.Outlined" Min="0" Clearable="true" Style="max-width:200px"
+                             HelperText="@(MetricCatalog.Get(C.Metric).DefaultMax is { } d ? $"Vazio = {d}" : "Vazio = automático")" />
+        }
+        <MudNumericField T="double?" Value="C.AlertAbove" ValueChanged="v => Save(C with { AlertAbove = v })" Label="Alerta acima de"
+                         Variant="Variant.Outlined" Min="0" Clearable="true" Style="max-width:200px" HelperText="O fundo muda de cor." />
+    </MudStack>
+    @if (C.AlertAbove is not null)
+    {
+        <PaletteColorField Label="Cor do alerta" Value="@C.AlertColor" ValueChanged="v => Save(C with { AlertColor = v })" />
+    }
+
+    <MudDivider />
+    <MudText Typo="Typo.subtitle2">Gráfico</MudText>
+
+    <div>
+        <MudText Typo="Typo.overline" Color="Color.Secondary">Temas prontos</MudText>
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+            @foreach (var theme in SystemInfoThemes.All)
+            {
+                var selected = string.Equals(theme.Background, C.Background, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(theme.Chart, C.ChartColor, StringComparison.OrdinalIgnoreCase);
+                <button type="button" title="@theme.Name" @onclick="() => Save(C with { Background = theme.Background, ChartColor = theme.Chart })"
+                        style="width:56px;height:36px;border-radius:6px;cursor:pointer;background:linear-gradient(180deg, @theme.Background 55%, @theme.Chart 55%);
+                               border:@(selected ? "3px solid var(--mud-palette-primary)" : "1px solid var(--mud-palette-lines-default)")"></button>
+            }
+        </MudStack>
+    </div>
+
+    <MudStack Row="true" Spacing="6" Wrap="Wrap.Wrap">
+        <PaletteColorField Label="Fundo" Value="@C.Background" ValueChanged="v => Save(C with { Background = v })" />
+        <PaletteColorField Label="Gráfico" Value="@C.ChartColor" ValueChanged="v => Save(C with { ChartColor = v })" />
+    </MudStack>
+
+    <MudSelect T="ChartStyle" Value="C.Style" ValueChanged="ChangeStyle" Label="Estilo" Variant="Variant.Outlined" Style="max-width:320px">
+        <MudSelectItem Value="ChartStyle.SoftFill">Linha com degradê suave</MudSelectItem>
+        <MudSelectItem Value="ChartStyle.Fill">Preenchimento em degradê</MudSelectItem>
+        <MudSelectItem Value="ChartStyle.Line">Linha</MudSelectItem>
+        <MudSelectItem Value="ChartStyle.LinePoints">Linha com pontos</MudSelectItem>
+        <MudSelectItem Value="ChartStyle.Hatch">Hachurado</MudSelectItem>
+        <MudSelectItem Value="ChartStyle.Matrix">Matriz de pontos</MudSelectItem>
+    </MudSelect>
+
+    <MudGrid Spacing="2">
+        @if (C.Style is ChartStyle.SoftFill or ChartStyle.Line or ChartStyle.LinePoints)
+        {
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.caption">Espessura da linha: @C.LineWidth</MudText>
+                <MudSlider T="int" Value="C.LineWidth" ValueChanged="v => Save(C with { LineWidth = v })" Min="5" Max="60" Step="1" />
+            </MudItem>
+        }
+        @if (C.Style is ChartStyle.SoftFill or ChartStyle.Fill)
+        {
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.caption">Opacidade em cima: @C.OpacityTop%</MudText>
+                <MudSlider T="int" Value="C.OpacityTop" ValueChanged="v => Save(C with { OpacityTop = v })" Min="0" Max="100" Step="5" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.caption">Opacidade embaixo: @C.OpacityBottom%</MudText>
+                <MudSlider T="int" Value="C.OpacityBottom" ValueChanged="v => Save(C with { OpacityBottom = v })" Min="0" Max="100" Step="5" />
+            </MudItem>
+        }
+        <MudItem xs="12" sm="6">
+            <MudText Typo="Typo.caption">Base ↑ (o gráfico começa acima do rodapé): @C.Baseline%</MudText>
+            <MudSlider T="int" Value="C.Baseline" ValueChanged="v => Save(C with { Baseline = v })" Min="0" Max="25" Step="1" />
+        </MudItem>
+    </MudGrid>
+
+    <MudDivider />
+    <MudText Typo="Typo.subtitle2">Texto</MudText>
+
+    <MudStack Row="true" Spacing="6" Wrap="Wrap.Wrap">
+        <MudStack Spacing="1">
+            <PaletteColorField Label="Cor do título" Value="@C.TitleColor" ValueChanged="v => Save(C with { TitleColor = v })" />
+            <MudText Typo="Typo.caption">Tamanho do título: @C.TitleSize%</MudText>
+            <MudSlider T="int" Value="C.TitleSize" ValueChanged="v => Save(C with { TitleSize = v })" Min="50" Max="160" Step="5" Style="max-width:300px" />
+            <MudCheckBox T="bool" Value="C.TitleOutline" ValueChanged="v => Save(C with { TitleOutline = v })" Color="Color.Primary">Contorno no título</MudCheckBox>
+        </MudStack>
+        <MudStack Spacing="1">
+            <PaletteColorField Label="Cor do valor" Value="@C.ValueColor" ValueChanged="v => Save(C with { ValueColor = v })" />
+            <MudText Typo="Typo.caption">Tamanho do valor: @C.ValueSize%</MudText>
+            <MudSlider T="int" Value="C.ValueSize" ValueChanged="v => Save(C with { ValueSize = v })" Min="50" Max="160" Step="5" Style="max-width:300px" />
+            <MudCheckBox T="bool" Value="C.ValueOutline" ValueChanged="v => Save(C with { ValueOutline = v })" Color="Color.Primary">Contorno no valor</MudCheckBox>
+            <MudCheckBox T="bool" Value="C.ShowUnit" ValueChanged="v => Save(C with { ShowUnit = v })" Color="Color.Primary">Mostrar a unidade</MudCheckBox>
+            <MudCheckBox T="bool" Value="C.UnitSuperscript" ValueChanged="v => Save(C with { UnitSuperscript = v })" Color="Color.Primary"
+                         Disabled="@(!C.ShowUnit)">Unidade em sobrescrito</MudCheckBox>
+        </MudStack>
+    </MudStack>
+
+    <MudDivider />
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+        <MudSelect T="TapAction" Value="C.Tap" ValueChanged="v => Save(C with { Tap = v })" Label="Toque" Variant="Variant.Outlined" Style="max-width:280px">
+            <MudSelectItem Value="TapAction.TaskManager">Abrir o Gerenciador de Tarefas</MudSelectItem>
+            <MudSelectItem Value="TapAction.Custom">Abrir outro programa ou endereço</MudSelectItem>
+            <MudSelectItem Value="TapAction.None">Nada</MudSelectItem>
+        </MudSelect>
+        @if (C.Tap == TapAction.Custom)
+        {
+            <MudTextField T="string" Value="@C.TapTarget" ValueChanged="v => Save(C with { TapTarget = v })" Label="Programa, arquivo ou URL"
+                          Variant="Variant.Outlined" Style="min-width:280px" />
+        }
+    </MudStack>
+</MudStack>
+
+@code {
+    private SystemInfoConfig C => Instance.Config;
+    private string? _preview;
+    private DateTime _previewAt;
+    private readonly Dictionary<MetricKind, bool> _available = [];
+    private readonly Dictionary<MetricKind, IReadOnlyList<MetricDevice>> _devices = [];
+
+    private string AutoTitle => MetricCatalog.DefaultTitle(C.Metric, C.NetworkUnit, C.Device);
+
+    protected override void OnInitialized()
+    {
+        Instance.Changed += OnChanged;
+        UpdatePreview();
+    }
+
+    private bool IsAvailable(MetricKind kind)
+    {
+        if (!_available.TryGetValue(kind, out var ok))
+        {
+            try
+            {
+                ok = Instance.Source.IsAvailable(kind);
+            }
+            catch (Exception)
+            {
+                ok = false;
+            }
+            _available[kind] = ok;
+        }
+        return ok;
+    }
+
+    private IReadOnlyList<MetricDevice> Devices(MetricKind kind)
+    {
+        if (!_devices.TryGetValue(kind, out var list))
+        {
+            try
+            {
+                list = Instance.Source.GetDevices(kind);
+            }
+            catch (Exception)
+            {
+                list = [];
+            }
+            _devices[kind] = list;
+        }
+        return list;
+    }
+
+    private static string DefaultDevice(MetricKind kind) => kind switch
+    {
+        MetricKind.DiskActivity => "O disco mais ocupado",
+        MetricKind.NetworkDown or MetricKind.NetworkUp => "Todas as placas de rede",
+        _ => "A GPU principal",
+    };
+
+    private static string Unavailable(MetricKind kind) => kind switch
+    {
+        MetricKind.CpuWatts => "Este PC não publica o consumo do processador (RAPL) para o Windows.",
+        MetricKind.GpuWatts => "Precisa de placa NVIDIA (a nvml.dll vem com o driver dela).",
+        MetricKind.GpuTemperature or MetricKind.GpuPowerPercent => "O driver da placa não informa isto ao Windows (precisa de WDDM 2.9 ou mais novo).",
+        _ => "O Windows não informa esta métrica neste PC.",
+    };
+
+    private Task<IEnumerable<string>> SearchHosts(string text, CancellationToken token)
+    {
+        var hosts = MetricCatalog.PingHosts.Select(h => h.Id);
+        if (!string.IsNullOrWhiteSpace(text) && !hosts.Contains(text))
+            hosts = hosts.Prepend(text.Trim());
+        return Task.FromResult(hosts);
+    }
+
+    private Task ChangeStyle(ChartStyle style)
+    {
+        // Os padrões de cada estilo no System Vitals.
+        var config = style switch
+        {
+            ChartStyle.SoftFill => C with { Style = style, LineWidth = 15, OpacityTop = 50, OpacityBottom = 0 },
+            ChartStyle.Fill => C with { Style = style, OpacityTop = 100, OpacityBottom = 0 },
+            ChartStyle.Line => C with { Style = style, LineWidth = 40 },
+            ChartStyle.LinePoints => C with { Style = style, LineWidth = 10 },
+            _ => C with { Style = style },
+        };
+        return Save(config);
+    }
+
+    private Task SetTitle(string? text) => Save(C with { Title = text == AutoTitle ? null : text ?? "" });
+
+    private async Task Save(SystemInfoConfig config)
+    {
+        await Instance.SetConfigAsync(config);
+        UpdatePreview();
+    }
+
+    private void UpdatePreview()
+    {
+        try
+        {
+            using var bitmap = SparklineRenderer.Draw(new PixelSize(198, 143), Instance.CurrentVisual());
+            using var stream = new MemoryStream();
+            bitmap.Save(stream, ImageFormat.Png);
+            _preview = "data:image/png;base64," + Convert.ToBase64String(stream.ToArray());
+        }
+        catch (Exception)
+        {
+            _preview = null;
+        }
+        _previewAt = DateTime.UtcNow;
+    }
+
+    private void OnChanged()
+    {
+        // O valor novo chega a cada intervalo; a prévia não precisa mais que uma vez por segundo.
+        if (DateTime.UtcNow - _previewAt < TimeSpan.FromSeconds(0.9))
+            return;
+        UpdatePreview();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Instance.Changed -= OnChanged;
+}

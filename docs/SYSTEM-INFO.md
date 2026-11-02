@@ -1,6 +1,6 @@
 # Plano: widget System Info
 
-Status: **planejamento**, nada implementado. Implementação só depois do OK do Victor.
+Status: **primeira versão implementada** (OK do Victor em 2/11/2026). Falta o teste no PC (roteiro no fim).
 
 Um widget só, configurável, que mostra uma métrica do PC com o valor grande e um minigráfico que se atualiza em
 tempo real. Baseado no "System Vitals" do Stream Deck (prints na thread): o mesmo botão vira CPU, GPU, RAM, rede ou
@@ -186,3 +186,13 @@ Sem pacote NuGet novo: PDH, D3DKMT e IP Helper são P/Invoke direto nas DLLs do 
    já sai do Windows). Ela vem com o driver; não se embute no plugin.
 2. Temperatura do CPU: o teste mostrou que não há fonte sem admin e driver de kernel. Proposta: fica fora.
 3. Ação do toque e do long-press.
+
+## Teste no PC (primeira versão)
+
+1. `.\deploy.ps1 -RestartManager` e adicionar o System Info numa página (Small).
+2. Monitor: as opções que o PC não tem aparecem como "não disponível" (temperatura do CPU nem está na lista).
+3. Conferir com o Gerenciador de Tarefas: CPU %, RAM %, GPU % (3D), VRAM, GPU °C, disco e rede.
+4. GPU W (NVML) e CPU W (RAPL) com um jogo ou carga: os valores se mexem.
+5. Os seis estilos de gráfico, os temas prontos e o alerta; prévia na tela de opções acompanha.
+6. Trocar de página e voltar: o gráfico continua cheio. Tela em repouso: o uso de CPU do Manager cai (coletor para).
+7. Toque abre o Gerenciador de Tarefas.

@@ -10,8 +10,9 @@ plugin "System" do Stream Deck.
 | --- | --- |
 | Open Application | Abre um app com o ícone dele. Toque abre (ou traz para a frente, se já está aberto); long-press fecha ou força o fechamento; uma bolinha verde no canto mostra que o app está aberto |
 | Audio Device | Troca a placa de som padrão do Windows (saída ou entrada). Cada toque passa para o próximo de uma lista (carrossel), long-press volta para o primeiro |
+| System Info | Uma métrica do PC (CPU, GPU, RAM, VRAM, rede, disco, ping) com o valor grande e um minigráfico em tempo real, como o System Vitals do Stream Deck. Sem programa de terceiros |
 
-Tamanhos: Mini (meia célula) e Small (o 1x1 da grade antiga).
+Tamanhos: Mini (meia célula) e Small (o 1x1 da grade antiga). O System Info usa Small, Wide e Large.
 
 Próximos: os outros do System do Stream Deck (Website, Hotkey, Text, Multimedia). Ver [docs/PLANO.md](docs/PLANO.md).
 
@@ -42,6 +43,26 @@ Opções:
 - **Ícone** por dispositivo: automático pelo nome, um da lista (alto-falante, fone, headset, microfone, webcam,
   monitor...) ou uma imagem sua.
 - O tile acompanha quando o padrão é trocado por fora (Painel de Som, outro app).
+
+## System Info
+
+Um widget só, que vira CPU, GPU, rede ou disco conforme a opção **Monitor**. Tudo vem do próprio Windows (contadores
+de desempenho, DXGI e o kernel gráfico), sem admin e sem HWiNFO, LibreHardwareMonitor ou parecidos.
+
+| Métrica | De onde vem |
+| --- | --- |
+| CPU %, RAM %, Disco % de atividade, Rede ↓/↑ | Contadores do Windows (os mesmos do Gerenciador de Tarefas) |
+| GPU %, VRAM % | Contadores `GPU Engine` e `GPU Adapter Memory` |
+| GPU °C, GPU % do limite de energia | Kernel gráfico (`D3DKMT`), driver WDDM 2.9+ |
+| CPU W | `Energy Meter` (RAPL), só em PCs que publicam isso para o Windows |
+| GPU W | `nvml.dll` que vem com o driver NVIDIA (sem ela, a opção some) |
+| Ping | Google, Cloudflare ou um host seu |
+
+Temperatura do CPU não existe: o Windows não lê o sensor do processador sem um driver de kernel de terceiros.
+
+Aparência como no System Vitals: seis estilos de gráfico, temas prontos (azul-marinho, verde-limão, azul), a paleta de
+32 cores dele, tamanho, cor e contorno do título e do valor, unidade em sobrescrito, "Base ↑" e alerta por cor acima
+de um valor. Toque abre o Gerenciador de Tarefas (ou outro programa). Fonte Rajdhani (licença OFL, em `Fonts/`).
 
 ## Requisitos
 

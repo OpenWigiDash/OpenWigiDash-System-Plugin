@@ -1,0 +1,33 @@
+@using OpenWigiDash.SystemPlugin.Metrics
+@using OpenWigiDash.SystemPlugin.Rendering
+
+@* Cor com a paleta de 32 cores do System Vitals e o seletor livre do navegador. *@
+<div>
+    <MudText Typo="Typo.overline" Color="Color.Secondary">@Label</MudText>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;max-width:420px">
+        @foreach (var hex in SystemInfoThemes.Palette)
+        {
+            var selected = string.Equals(Value, hex, StringComparison.OrdinalIgnoreCase);
+            <button type="button" title="@hex" @onclick="() => Set(hex)"
+                    style="width:22px;height:22px;border-radius:4px;cursor:pointer;background:@hex;
+                           border:@(selected ? "3px solid var(--mud-palette-primary)" : "1px solid var(--mud-palette-lines-default)")"></button>
+        }
+        <label title="Outra cor" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;margin-left:4px">
+            <input type="color" value="@(Value ?? "#000000")" @onchange="e => Set(e.Value?.ToString())"
+                   style="width:30px;height:26px;padding:0;border:none;background:none;cursor:pointer" />
+            <MudText Typo="Typo.caption">@Value</MudText>
+        </label>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    private async Task Set(string? hex)
+    {
+        if (TileColor.Normalize(hex) is { } value)
+            await ValueChanged.InvokeAsync(value);
+    }
+}

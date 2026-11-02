@@ -9,7 +9,7 @@ Substituto do plugin "System" do Stream Deck no OpenWigiDashManager, já no SDK 
 | --- | --- | --- |
 | 1 | Open Application | Primeira versão (1.0.0-preview.1) |
 | 2 | Audio Device (trocar a placa de som padrão do Windows) | Feito (mesma versão 1.0.0-preview.1) |
-| 3 | System Info (métrica do PC com minigráfico, como o System Vitals) | Planejamento: [SYSTEM-INFO.md](SYSTEM-INFO.md) |
+| 3 | System Info (métrica do PC com minigráfico, como o System Vitals) | Primeira versão; falta teste no PC. Plano: [SYSTEM-INFO.md](SYSTEM-INFO.md) |
 | 4+ | Website, Hotkey, Hotkey Switch, Open, Close, Text, Multimedia | Depois, conforme o uso |
 
 ## Open Application
