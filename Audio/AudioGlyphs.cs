@@ -6,7 +6,8 @@ namespace OpenWigiDash.SystemPlugin.Audio;
 /// </summary>
 public static class AudioGlyphs
 {
-    public sealed record GlyphOption(string Key, string Name, string Glyph);
+    /// <param name="Accent">Segundo glifo, pequeno no canto inferior direito (ex.: microfone sobre a webcam).</param>
+    public sealed record GlyphOption(string Key, string Name, string Glyph, string? Accent = null);
 
     public static IReadOnlyList<GlyphOption> All { get; } =
     [
@@ -15,6 +16,7 @@ public static class AudioGlyphs
         new("headset", "Headset", ""),
         new("microphone", "Microfone", ""),
         new("camera", "Webcam", ""),
+        new("webcam-mic", "Webcam + microfone", "", ""),
         new("monitor", "Monitor / TV", ""),
         new("volume", "Volume", ""),
         new("bluetooth", "Bluetooth", ""),
@@ -42,7 +44,7 @@ public static class AudioGlyphs
     {
         var name = (deviceName ?? "").ToLowerInvariant();
         if (ContainsAny(name, "webcam", "camera", "câmera", "c920", "c922", "brio", "cam "))
-            return "camera";
+            return flow == AudioFlow.Input ? "webcam-mic" : "camera";
         if (ContainsAny(name, "headset", "quantum", "arctis", "hyperx", "cloud", "kraken", "astro"))
             return "headset";
         // "Microfone" contém "fone": o microfone vem antes do fone de ouvido.

@@ -55,8 +55,8 @@
             var isDefault = device is not null && string.Equals(device.Id, _defaultId, StringComparison.OrdinalIgnoreCase);
             <MudPaper Outlined="true" Class="pa-2 my-1">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                    <span style="font-family:'Segoe Fluent Icons','Segoe MDL2 Assets';font-size:22px;width:28px;text-align:center">
-                        @AudioGlyphs.For(entry.Glyph, entry.Name, Instance.Flow).Glyph
+                    <span style="width:28px;text-align:center;flex:none">
+                        <GlyphView Option="@AudioGlyphs.For(entry.Glyph, entry.Name, Instance.Flow)" Background="var(--mud-palette-surface)" />
                     </span>
                     <MudStack Spacing="0" Style="flex:1;min-width:0">
                         <MudText Typo="Typo.body2" Style="font-weight:600">@(index + 1). @entry.Name</MudText>

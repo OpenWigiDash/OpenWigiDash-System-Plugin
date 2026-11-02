@@ -21,6 +21,9 @@ public sealed record TileVisual(Bitmap? Icon, string? Title, bool Running, bool 
     /// <summary>Caractere da fonte de ícones do Windows, desenhado quando não há <see cref="Icon"/>.</summary>
     public string? Glyph { get; init; }
 
+    /// <summary>Glifo pequeno no canto inferior direito do <see cref="Glyph"/> (ícone combinado).</summary>
+    public string? GlyphAccent { get; init; }
+
     /// <summary>Bolinhas de posição no topo (carrossel); 0 = nenhuma.</summary>
     public int DotCount { get; init; }
 
@@ -88,7 +91,7 @@ public static class TileRenderer
                         cover: visual.Fit == IconFit.Cover, trim: true);
             }
             else if (visual.Glyph is { } glyph)
-                DrawGlyph(g, size, theme, glyph, visual.Dimmed,
+                DrawGlyph(g, size, theme, glyph, visual.GlyphAccent, visual.Background ?? Background, visual.Dimmed,
                     hasText: !string.IsNullOrWhiteSpace(visual.Title) || !string.IsNullOrWhiteSpace(visual.Detail));
             else
                 DrawDotGrid(g, iconRect, visual.Dimmed);
@@ -250,7 +253,8 @@ public static class TileRenderer
     /// Desenha o glifo pelo contorno medido, não pelo tamanho da fonte: a caixa da fonte tem muita sobra em volta do
     /// desenho, e o ícone ficava pequeno no tile.
     /// </summary>
-    private static void DrawGlyph(Graphics g, PixelSize size, WidgetTheme theme, string glyph, bool dimmed, bool hasText)
+    private static void DrawGlyph(Graphics g, PixelSize size, WidgetTheme theme, string glyph, string? accent, Color background,
+        bool dimmed, bool hasText)
     {
         var side = Math.Min(size.Width, size.Height);
         var top = side * 0.14f; // espaço das bolinhas de posição
@@ -260,7 +264,23 @@ public static class TileRenderer
 
         var color = ToColor(theme.PrimaryForeground);
         using var brush = new SolidBrush(dimmed ? Color.FromArgb(110, color) : color);
-        FillGlyph(g, glyph, box, target, brush);
+        if (accent is null)
+        {
+            FillGlyph(g, glyph, box, target, brush);
+            return;
+        }
+
+        // Ícone combinado: o principal um pouco menor e para cima/esquerda, o segundo num círculo no canto.
+        var main = target * 0.86f;
+        var mainBox = new RectangleF(box.X - target * 0.08f, box.Y - target * 0.06f, box.Width, box.Height);
+        FillGlyph(g, glyph, mainBox, main, brush);
+        var small = target * 0.50f;
+        var cx = box.X + box.Width / 2f + target * 0.30f;
+        var cy = box.Y + box.Height / 2f + target * 0.26f;
+        var circle = new RectangleF(cx - small * 0.62f, cy - small * 0.62f, small * 1.24f, small * 1.24f);
+        using (var cut = new SolidBrush(background))
+            g.FillEllipse(cut, circle);
+        FillGlyph(g, accent, circle, small, brush);
     }
 
     /// <summary>Glifo centrado em <paramref name="box"/>, com o maior lado do desenho igual a <paramref name="target"/>.</summary>

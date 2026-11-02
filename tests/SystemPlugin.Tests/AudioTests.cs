@@ -65,7 +65,7 @@ public class DeviceMatcherTests
 
     [Theory]
     [InlineData("Microfone do Headset (2- JBL Quantum 800)", AudioFlow.Input, "headset")]
-    [InlineData("Microphone (HD Pro Webcam C920)", AudioFlow.Input, "camera")]
+    [InlineData("Microphone (HD Pro Webcam C920)", AudioFlow.Input, "webcam-mic")]
     [InlineData("AC10 (NVIDIA High Definition Audio)", AudioFlow.Output, "monitor")]
     [InlineData("Alto-falantes (Realtek(R) Audio)", AudioFlow.Output, "speaker")]
     [InlineData("Microfone (Realtek(R) Audio)", AudioFlow.Input, "microphone")]

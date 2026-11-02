@@ -221,9 +221,11 @@ public sealed class AudioDeviceInstance : IWidgetInstance
         var current = devices.FirstOrDefault(d => string.Equals(d.Id, defaultId, StringComparison.OrdinalIgnoreCase));
         var entry = index >= 0 ? _entries[index] : null;
         var name = current is null ? null : ShortName(current);
+        var glyph = AudioGlyphs.For(entry?.Glyph, entry?.Name ?? current?.Name, Flow);
         return new TileVisual(entry is null ? null : ImageFor(entry), title ?? (compact ? null : name), false)
         {
-            Glyph = AudioGlyphs.For(entry?.Glyph, entry?.Name ?? current?.Name, Flow).Glyph,
+            Glyph = glyph.Glyph,
+            GlyphAccent = glyph.Accent,
             DotCount = _entries.Count,
             DotIndex = index,
         };
