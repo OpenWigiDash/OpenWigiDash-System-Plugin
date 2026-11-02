@@ -16,13 +16,13 @@ ou do firmware; testar no PC antes de prometer. **Não** = só com driver de ker
 
 | Métrica | Dá? | De onde vem | Observações |
 | --- | --- | --- | --- |
-| CPU % de uso | **Sim** | PDH `\Processor Information(_Total)\% Processor Utility` | É o número do Gerenciador de Tarefas (o `% Processor Time` antigo fica abaixo dele com turbo). |
-| CPU Watts | **Provável, em poucos PCs** | PDH `\Energy Meter(*)\Power` (mW) e `\Power Meter(*)\Power` | Só existe quando o firmware ou o driver de energia publica o RAPL pelo EMI do Windows. Comum em notebook Intel, raro em desktop, quase nunca em AMD. Se não existir, a opção some da lista. |
-| CPU Temperatura | **Não, de forma confiável** | PDH `\Thermal Zone Information(*)\Temperature` (Kelvin, sem admin) | É a zona térmica ACPI da placa-mãe, não o sensor do processador. Em muitos desktops fica parada (ex.: 27,8 °C) ou anda devagar. A temperatura real do pacote do CPU só sai do MSR (Intel) ou do SMN (AMD), que pedem driver de kernel. Proposta: oferecer "Zona térmica (ACPI)" como opção experimental, com esse nome, e só se o teste no PC mostrar um valor que se mexe. |
+| CPU % de uso | **Sim** | PDH `\Processor Information(_Total)\% Processor Utility` | É o número do Gerenciador de Tarefas. Passa de 100 com turbo (134% no teste), então limitamos a 100 como ele faz. |
+| CPU Watts | **Sim no PC do Victor** | PDH `\Energy Meter(*)\Power` (mW), instância `RAPL_Package0_PKG` | No teste (Ryzen 7 5700X): 48 W parado, 76,5 W com carga. Também há por núcleo. `_Total` fica em 0. Em outros PCs pode não existir; aí a opção some da lista. |
+| CPU Temperatura | **Não** | PDH `\Thermal Zone Information(*)\Temperature` | No teste ficou parada em 290 K (16,9 °C) mesmo com 100% de CPU: é um valor fixo do ACPI. O WMI `MSAcpi_ThermalZoneTemperature` dá acesso negado sem admin. A temperatura real só sai com driver de kernel. Fica fora. |
 | RAM % de uso | **Sim** | `GlobalMemoryStatusEx` (`dwMemoryLoad`, ou total menos disponível) | Trivial. |
 | GPU % de uso | **Sim** | PDH `\GPU Engine(*)\Utilization Percentage` (WDDM 2.x, Windows 10 1709+) | É o que o Gerenciador de Tarefas usa: somamos por adaptador e tipo de engine e mostramos o maior (normalmente o 3D). Funciona com NVIDIA, AMD e Intel. Não precisa de terceiros, ao contrário do que o System Vitals faz. |
-| GPU Watts | **Não em watts** | `D3DKMTQueryAdapterInfo` (`KMTQAITYPE_ADAPTERPERFDATA`), campo `Power` | O Windows dá a potência em **% do limite** da placa, não em watts, e só com driver WDDM 2.9+. Dá para mostrar "GPU Power %" se o teste confirmar. Watts de verdade só pela biblioteca do driver (ver "Driver do fabricante"). |
-| GPU Temperatura | **Provável** | `D3DKMTQueryAdapterInfo` (`KMTQAITYPE_ADAPTERPERFDATA`), campo `Temperature` (décimos de °C) | É a mesma fonte da temperatura da GPU no Gerenciador de Tarefas (aba Desempenho > GPU). Se o Gerenciador mostra a temperatura no seu PC, a gente consegue ler. API pública do `gdi32.dll`, sem admin. |
+| GPU Watts | **Em %, sim; em watts, pela NVML** | `D3DKMTQueryAdapterInfo` (`KMTQAITYPE_ADAPTERPERFDATA`), campo `Power` (décimos de %) | O Windows dá % do limite (15,2% no teste). Watts saem da `nvml.dll` do driver NVIDIA (27,4 W no teste, limite 180 W), que bate com o %. |
+| GPU Temperatura | **Sim** | `D3DKMTQueryAdapterInfo` (`KMTQAITYPE_ADAPTERPERFDATA`), campo `Temperature` (décimos de °C) | No teste: 47,4 °C, igual à NVML (diferença menor que 0,5 °C). Também dá rotação da fan e a temperatura máxima. Sem admin e sem DLL de fabricante. |
 | VRAM % de uso | **Sim** | PDH `\GPU Adapter Memory(*)\Dedicated Usage` e o total por `IDXGIAdapter` (`DedicatedVideoMemory`) | Pode diferir 1 ou 2 pontos do NVML (que conta memória reservada pelo driver). |
 | Rede Up | **Sim** | `GetIfTable2` (bytes enviados, por diferença) ou PDH `\Network Interface(*)\Bytes Sent/sec` | Escolha da placa de rede, ou soma das físicas ligadas. MB/s ou Mbps. |
 | Rede Down | **Sim** | Igual, com bytes recebidos | Idem. |
@@ -50,7 +50,20 @@ do contador acima, e ainda pede administrador. Todos os programas que mostram a 
 Temp, LibreHardwareMonitor) instalam um driver de kernel para ler o MSR; o WinRing0, o mais usado, hoje é
 bloqueado pelo Defender como driver vulnerável. Fica fora por decisão de projeto.
 
-## Teste no PC antes de implementar (fase 0)
+## Resultado do teste no PC do Victor (2/11/2026)
+
+Windows 11 26H2 (build 26300), Ryzen 7 5700X, RTX 5060 Ti 16 GB (driver 621.01). Programa de console, sem admin,
+10 s parado, 16 s com os 16 threads em 100%, 10 s parado.
+
+- **Funcionou:** CPU % (limitar a 100), CPU W pelo RAPL, RAM, GPU % (6% no 3D, igual à NVML), VRAM (3586 de
+  16052 MiB = 22%), GPU °C, GPU Power %, fan, disco e rede.
+- **Não funcionou:** temperatura do CPU (zona ACPI parada em 16,9 °C, WMI com acesso negado).
+- **NVML:** existe e responde (47 °C, 27,4 W, 6%, 3813 MiB). Vem com o driver, não é instalação à parte.
+- **Cuidado:** a RTX aparece como **dois adaptadores** no D3DKMT (por causa do SuperDisplay). Ficamos só com o que
+  tem contadores `GPU Adapter Memory`. O `Win32_VideoController.AdapterRAM` para em 4 GB: não usar.
+- GPU com carga não foi testada (não havia programa para isso sem instalar nada).
+
+## Teste no PC antes de implementar (fase 0, feito)
 
 Um programa de console pequeno (ou um teste manual no plugin) que lista, no PC do Victor:
 
@@ -128,14 +141,14 @@ Sem pacote NuGet novo: PDH, D3DKMT e IP Helper são P/Invoke direto nas DLLs do 
 ## Ordem sugerida
 
 1. Fase 0: o teste no PC (acima).
-2. Primeira versão: CPU %, RAM %, GPU %, VRAM %, Rede Up/Down, Disco %, mais GPU °C e GPU Power % se a fase 0
-   confirmar.
+2. Primeira versão: CPU %, CPU W (onde existir RAPL), RAM %, GPU %, GPU °C, GPU Power %, VRAM %, Rede Up/Down,
+   Disco %.
 3. Depois, conforme a decisão sobre o driver do fabricante: GPU Watts pela NVML. E o que mais fizer falta da lista
    de extras.
 
 ## Decisões para o Victor
 
-1. Aceitar ou não a `nvml.dll` do driver da NVIDIA como fonte opcional (dá GPU Watts e garante GPU °C).
-2. Oferecer a "Zona térmica (ACPI)" como temperatura do CPU, com esse nome, se o teste mostrar valor útil; ou
-   deixar a temperatura do CPU fora.
+1. Aceitar ou não a `nvml.dll` do driver da NVIDIA como fonte opcional, só para GPU Watts (a temperatura da GPU
+   já sai do Windows). Ela vem com o driver; não se embute no plugin.
+2. Temperatura do CPU: o teste mostrou que não há fonte sem admin e driver de kernel. Proposta: fica fora.
 3. Ação do toque e do long-press.
