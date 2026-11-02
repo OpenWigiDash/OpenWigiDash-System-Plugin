@@ -22,6 +22,18 @@ public class AppMatcherTests
         Assert.False(AppMatcher.IsMatch(DiscordTarget, new ProcessInfo(1, "Discord", @"C:\Outro\Discord.exe", null)));
 
     [Fact]
+    public void SquirrelStubWithoutProcessStartMatchesVersionFolder()
+    {
+        // Discord atual: o atalho do Iniciar aponta para ...\Discord\Discord.exe, sem Update.exe nem argumentos.
+        var target = AppTarget.Build("com.squirrel.Discord.Discord", "Discord", "com.squirrel.Discord.Discord",
+            Discord + @"\Discord.exe", null, _ => null);
+
+        Assert.True(AppMatcher.IsMatch(target, new ProcessInfo(1, "Discord", Discord + @"\app-1.0.9266\Discord.exe", null)));
+        Assert.False(AppMatcher.IsMatch(target, new ProcessInfo(2, "Discord", Discord + @"\outra\Discord.exe", null)));
+        Assert.False(AppMatcher.IsMatch(target, new ProcessInfo(3, "Updater", Discord + @"\app-1.0.9266\Updater.exe", null)));
+    }
+
+    [Fact]
     public void LauncherMatchesSiblingProcess()
     {
         var ea = new AppTarget("EA", "EA", false, null, @"C:\Program Files\Electronic Arts\EA Desktop\EA Desktop\EALauncher.exe",
@@ -68,5 +80,37 @@ public class AppMatcherTests
         Assert.Single(state.Processes);
         Assert.Equal(new IntPtr[] { 1, 2 }, state.Windows.Select(w => w.Handle));
         Assert.False(snapshot.StateOf(null).IsRunning);
+    }
+}
+
+public class FinalPathTests
+{
+    [Fact]
+    public void MissingPathIsReturnedAsIs() =>
+        Assert.Equal(@"C:\nao\existe\app.exe", AppCatalog.FinalPath(@"C:\nao\existe\app.exe"));
+
+    [Fact]
+    public void JunctionResolvesToRealFolder()
+    {
+        // O EA: ...\EA Desktop\EA Desktop é um link para ...\EA Desktop\13.813...\EA Desktop.
+        var root = Path.Combine(Path.GetTempPath(), "owd-final-" + Guid.NewGuid().ToString("N"));
+        var real = Path.Combine(root, "13.813.1", "EA Desktop");
+        var link = Path.Combine(root, "EA Desktop");
+        Directory.CreateDirectory(real);
+        try
+        {
+            using (var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{real}\"")
+                   { UseShellExecute = false, CreateNoWindow = true }))
+                mklink!.WaitForExit();
+            Assert.True(Directory.Exists(link));
+
+            Assert.Equal(real, AppCatalog.FinalPath(link), ignoreCase: true);
+        }
+        finally
+        {
+            if (Directory.Exists(link))
+                Directory.Delete(link);
+            Directory.Delete(root, recursive: true);
+        }
     }
 }

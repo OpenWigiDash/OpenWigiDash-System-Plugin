@@ -1,0 +1,197 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using OpenWigiDash.SystemPlugin.Audio
+@inherits WidgetSettingsComponent<AudioDeviceInstance>
+@implements IDisposable
+@inject IDialogService Dialogs
+
+@* Placa de som: os campos do "Toggle Audio Device" do Stream Deck, com lista (carrossel) no lugar de primário e secundário. *@
+<MudStack Spacing="4">
+    <MudTextField T="string" Value="@Instance.Title" ValueChanged="v => Instance.SetTitleAsync(v)" Label="Título"
+                  Variant="Variant.Outlined" Clearable="true"
+                  HelperText="Vazio = mostra o nome do dispositivo atual (no Small)." />
+
+    <BackgroundColorField Value="@Instance.Background" ValueChanged="v => Instance.SetBackgroundAsync(v)" />
+
+    <MudStack Row="true" Spacing="6">
+        <div>
+            <MudText Typo="Typo.overline" Color="Color.Secondary">Direção</MudText>
+            <MudRadioGroup T="AudioFlow" Value="Instance.Flow" ValueChanged="ChangeFlow">
+                <MudRadio Value="AudioFlow.Output" Color="Color.Primary">Saída</MudRadio>
+                <MudRadio Value="AudioFlow.Input" Color="Color.Primary">Entrada</MudRadio>
+            </MudRadioGroup>
+        </div>
+        <div>
+            <MudText Typo="Typo.overline" Color="Color.Secondary">Papel</MudText>
+            <MudRadioGroup T="AudioRoles" Value="Instance.Roles" ValueChanged="v => Instance.SetRolesAsync(v)">
+                <MudRadio Value="AudioRoles.Default" Color="Color.Primary">Padrão</MudRadio>
+                <MudRadio Value="AudioRoles.Communications" Color="Color.Primary">Comunicações</MudRadio>
+                <MudRadio Value="AudioRoles.Both" Color="Color.Primary">Os dois</MudRadio>
+            </MudRadioGroup>
+        </div>
+    </MudStack>
+
+    <MudCheckBox T="bool" Value="Instance.ShowFlowBadge" ValueChanged="v => Instance.SetShowFlowBadgeAsync(v)" Color="Color.Primary">
+        Mostrar no canto se o tile troca a saída (alto-falante azul) ou a entrada (microfone laranja)
+    </MudCheckBox>
+
+    <MudSelect T="DeviceMatching" Value="Instance.Matching" ValueChanged="v => Instance.SetMatchingAsync(v)"
+               Label="Reconhecer o dispositivo" Variant="Variant.Outlined"
+               HelperText="Fuzzy acha o headset sem fio mesmo quando o dongle muda de porta e o Windows troca o id.">
+        <MudSelectItem Value="DeviceMatching.Fuzzy">Fuzzy (pelo nome, se o id mudar)</MudSelectItem>
+        <MudSelectItem Value="DeviceMatching.Exact">Exato (só pelo id)</MudSelectItem>
+    </MudSelect>
+
+    <div>
+        <MudText Typo="Typo.overline" Color="Color.Secondary">Dispositivos (cada toque passa para o próximo; long-press volta ao primeiro)</MudText>
+        @if (Instance.Entries.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Nenhum ainda. Adicione dois ou mais abaixo.</MudText>
+        }
+        @for (var i = 0; i < Instance.Entries.Count; i++)
+        {
+            var index = i;
+            var entry = Instance.Entries[index];
+            var device = Instance.Resolve(entry);
+            var isDefault = device is not null && string.Equals(device.Id, _defaultId, StringComparison.OrdinalIgnoreCase);
+            <MudPaper Outlined="true" Class="pa-2 my-1">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <span style="width:28px;text-align:center;flex:none">
+                        <GlyphView Option="@AudioGlyphs.For(entry.Glyph, entry.Name, Instance.Flow)" Background="var(--mud-palette-surface)" />
+                    </span>
+                    <MudStack Spacing="0" Style="flex:1;min-width:0">
+                        <MudText Typo="Typo.body2" Style="font-weight:600">@(index + 1). @entry.Name</MudText>
+                        <MudText Typo="Typo.caption" Color="@(device is null ? Color.Warning : Color.Secondary)">
+                            @(device is null ? "Não encontrado agora" : isDefault ? "Em uso agora" : device.Id == entry.Id ? "Ligado" : $"Ligado como \"{device.Name}\"")
+                        </MudText>
+                    </MudStack>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => OpenPicker(index)">Ícone…</MudButton>
+                    <label class="mud-button-root mud-icon-button" title="Imagem própria" style="cursor:pointer">
+                        <MudIcon Icon="@Icons.Material.Filled.Image" />
+                        <InputFile OnChange="e => UploadImage(index, e)" accept="image/png,image/jpeg,image/bmp,image/gif" style="display:none" />
+                    </label>
+                    @if (entry.ImageFileId is not null)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.HideImage" OnClick="() => Instance.ClearImageAsync(index)" aria-label="Tirar a imagem" />
+                    }
+                    <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Disabled="@(index == 0)" OnClick="() => Instance.MoveAsync(index, -1)" aria-label="Subir" />
+                    <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Disabled="@(index == Instance.Entries.Count - 1)" OnClick="() => Instance.MoveAsync(index, 1)" aria-label="Descer" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" OnClick="() => Instance.RemoveAsync(index)" aria-label="Tirar da lista" />
+                </MudStack>
+            </MudPaper>
+        }
+    </div>
+
+    <MudStack Row="true" AlignItems="AlignItems.Center">
+        <MudSelect T="string" @bind-Value="_toAdd" Label="Adicionar dispositivo" Variant="Variant.Outlined" Style="min-width:320px">
+            @foreach (var device in Available)
+            {
+                <MudSelectItem Value="@device.Id">@(device.Name + (device.Active ? "" : " (desconectado)"))</MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_toAdd is null)" OnClick="Add">Adicionar</MudButton>
+    </MudStack>
+    @if (_error is not null)
+    {
+        <MudText Typo="Typo.caption" Color="Color.Error">@_error</MudText>
+    }
+</MudStack>
+
+
+@code {
+    private string? _toAdd;
+    private string? _defaultId;
+    private string? _error;
+    private async Task OpenPicker(int index)
+    {
+        if (index >= Instance.Entries.Count)
+            return;
+        var entry = Instance.Entries[index];
+        var parameters = new DialogParameters<GlyphPickerDialog>
+        {
+            { d => d.Current, entry.Glyph },
+            { d => d.DeviceName, entry.Name },
+            { d => d.Flow, Instance.Flow },
+        };
+        var dialog = await Dialogs.ShowAsync<GlyphPickerDialog>("Ícone de " + entry.Name, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true, CloseButton = true });
+        if (await dialog.Result is not { Canceled: false, Data: string key })
+            return;
+        await Instance.SetGlyphAsync(index, key.Length == 0 ? null : key);
+    }
+
+    private IEnumerable<AudioDevice> Available =>
+        SafeDevices().Where(d => !Instance.Entries.Any(e => string.Equals(e.Id, d.Id, StringComparison.OrdinalIgnoreCase)));
+
+    protected override void OnInitialized()
+    {
+        Instance.Changed += OnChanged;
+        Refresh();
+    }
+
+    private IReadOnlyList<AudioDevice> SafeDevices()
+    {
+        try
+        {
+            return Instance.Devices;
+        }
+        catch (Exception ex)
+        {
+            _error = "Não deu para ler os dispositivos de áudio: " + ex.Message;
+            return [];
+        }
+    }
+
+    private void Refresh()
+    {
+        try
+        {
+            _defaultId = Instance.DefaultId;
+        }
+        catch
+        {
+            _defaultId = null;
+        }
+    }
+
+    private async Task ChangeFlow(AudioFlow flow)
+    {
+        _toAdd = null;
+        await Instance.SetFlowAsync(flow);
+    }
+
+    private async Task Add()
+    {
+        if (SafeDevices().FirstOrDefault(d => d.Id == _toAdd) is { } device)
+            await Instance.AddDeviceAsync(device);
+        _toAdd = null;
+    }
+
+    private async Task UploadImage(int index, InputFileChangeEventArgs e)
+    {
+        _error = null;
+        var temp = Path.Combine(Path.GetTempPath(), "openwigidash-" + Guid.NewGuid().ToString("N") + Path.GetExtension(e.File.Name));
+        try
+        {
+            await using (var target = File.Create(temp))
+            await using (var source = e.File.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024))
+                await source.CopyToAsync(target);
+            await Instance.SetImageAsync(index, temp);
+        }
+        catch (Exception ex)
+        {
+            _error = "Não deu para usar a imagem: " + ex.Message;
+        }
+        finally
+        {
+            try { File.Delete(temp); } catch (IOException) { }
+        }
+    }
+
+    private void OnChanged()
+    {
+        Refresh();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Instance.Changed -= OnChanged;
+}

@@ -17,7 +17,28 @@ namespace OpenWigiDash.SystemPlugin.Rendering;
 public sealed record TileVisual(Bitmap? Icon, string? Title, bool Running, bool Dimmed = false, string? Detail = null)
 {
     public IconFit Fit { get; init; } = IconFit.Fill;
+
+    /// <summary>Caractere da fonte de ícones do Windows, desenhado quando não há <see cref="Icon"/>.</summary>
+    public string? Glyph { get; init; }
+
+    /// <summary>Glifo pequeno no canto inferior direito do <see cref="Glyph"/> (ícone combinado).</summary>
+    public string? GlyphAccent { get; init; }
+
+    /// <summary>Bolinhas de posição no topo (carrossel); 0 = nenhuma.</summary>
+    public int DotCount { get; init; }
+
+    /// <summary>Bolinha preenchida; -1 = nenhuma (o padrão atual não está na lista).</summary>
+    public int DotIndex { get; init; } = -1;
+
+    /// <summary>Cor de fundo escolhida; <c>null</c> = preto (ou a cor da placa do ícone, no Open Application).</summary>
+    public Color? Background { get; init; }
+
+    /// <summary>Selo no canto inferior esquerdo (ex.: alto-falante azul = saída, microfone laranja = entrada).</summary>
+    public TileBadge? Badge { get; init; }
 }
+
+/// <summary>Quadradinho colorido com um glifo da fonte de ícones do Windows.</summary>
+public sealed record TileBadge(string Glyph, Color Color);
 
 /// <summary>Quanto do tile o ícone do app ocupa.</summary>
 public enum IconFit
@@ -49,7 +70,7 @@ public static class TileRenderer
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
-            g.Clear(Background);
+            g.Clear(visual.Background ?? Background);
 
             var side = Math.Min(size.Width, size.Height);
             var iconSide = side * 0.78f;
@@ -61,7 +82,7 @@ public static class TileRenderer
                 Color? plate;
                 lock (icon)
                     plate = Analyze(icon).Plate;
-                if (visual.Fit != IconFit.Padded && !visual.Dimmed && plate is { } color)
+                if (visual.Background is null && visual.Fit != IconFit.Padded && !visual.Dimmed && plate is { } color)
                     g.Clear(color);
                 if (visual.Fit == IconFit.Padded)
                     DrawIcon(g, icon, iconRect, visual.Dimmed, cover: false, trim: false);
@@ -69,12 +90,21 @@ public static class TileRenderer
                     DrawIcon(g, icon, new RectangleF(0, 0, size.Width, size.Height), visual.Dimmed,
                         cover: visual.Fit == IconFit.Cover, trim: true);
             }
+            else if (visual.Glyph is { } glyph)
+                DrawGlyph(g, size, theme, glyph, visual.GlyphAccent, visual.Background ?? Background, visual.Dimmed,
+                    hasText: !string.IsNullOrWhiteSpace(visual.Title) || !string.IsNullOrWhiteSpace(visual.Detail));
             else
                 DrawDotGrid(g, iconRect, visual.Dimmed);
+
+            if (visual.DotCount > 1)
+                DrawPositionDots(g, size, visual.DotCount, visual.DotIndex);
 
             var text = !string.IsNullOrWhiteSpace(visual.Detail) ? visual.Detail : visual.Title;
             if (!string.IsNullOrWhiteSpace(text))
                 DrawTitle(g, size, theme, text!, small: !string.IsNullOrWhiteSpace(visual.Detail));
+
+            if (visual.Badge is { } badge)
+                DrawBadge(g, size, badge);
 
             if (visual.Running)
                 DrawRunningDot(g, size);
@@ -209,6 +239,113 @@ public static class TileRenderer
         var bl = Median(samples.Select(p => p.B).ToList());
         var close = samples.Count(p => Math.Abs(p.R - r) <= 24 && Math.Abs(p.G - g) <= 24 && Math.Abs(p.B - bl) <= 24);
         return close >= samples.Count * 9 / 10 ? Color.FromArgb(r, g, bl) : null;
+    }
+
+    private static readonly string IconFont = PickIconFont();
+
+    private static string PickIconFont()
+    {
+        using var fonts = new InstalledFontCollection();
+        return fonts.Families.Any(f => f.Name == "Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets";
+    }
+
+    /// <summary>
+    /// Desenha o glifo pelo contorno medido, não pelo tamanho da fonte: a caixa da fonte tem muita sobra em volta do
+    /// desenho, e o ícone ficava pequeno no tile.
+    /// </summary>
+    private static void DrawGlyph(Graphics g, PixelSize size, WidgetTheme theme, string glyph, string? accent, Color background,
+        bool dimmed, bool hasText)
+    {
+        var side = Math.Min(size.Width, size.Height);
+        var top = side * 0.14f; // espaço das bolinhas de posição
+        var bottom = hasText ? size.Height * 0.70f : size.Height - side * 0.10f;
+        var box = new RectangleF(0, top, size.Width, Math.Max(1f, bottom - top));
+        var target = Math.Min(box.Height, side * 0.80f);
+
+        var color = ToColor(theme.PrimaryForeground);
+        using var brush = new SolidBrush(dimmed ? Color.FromArgb(110, color) : color);
+        if (accent is null)
+        {
+            FillGlyph(g, glyph, box, target, brush);
+            return;
+        }
+
+        // Ícone combinado: o principal um pouco menor e para cima/esquerda, o segundo num círculo no canto.
+        var main = target * 0.86f;
+        var mainBox = new RectangleF(box.X - target * 0.08f, box.Y - target * 0.06f, box.Width, box.Height);
+        FillGlyph(g, glyph, mainBox, main, brush);
+        var small = target * 0.50f;
+        var cx = box.X + box.Width / 2f + target * 0.30f;
+        var cy = box.Y + box.Height / 2f + target * 0.26f;
+        var circle = new RectangleF(cx - small * 0.62f, cy - small * 0.62f, small * 1.24f, small * 1.24f);
+        using (var cut = new SolidBrush(background))
+            g.FillEllipse(cut, circle);
+        FillGlyph(g, accent, circle, small, brush);
+    }
+
+    /// <summary>Glifo centrado em <paramref name="box"/>, com o maior lado do desenho igual a <paramref name="target"/>.</summary>
+    private static void FillGlyph(Graphics g, string glyph, RectangleF box, float target, Brush brush)
+    {
+        using var path = new GraphicsPath();
+        using (var family = new FontFamily(IconFont))
+            path.AddString(glyph, family, (int)FontStyle.Regular, 100f, PointF.Empty, StringFormat.GenericTypographic);
+        var bounds = path.GetBounds();
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            return;
+        var scale = target / Math.Max(bounds.Width, bounds.Height);
+        using var matrix = new Matrix();
+        matrix.Translate(box.X + box.Width / 2f, box.Y + box.Height / 2f);
+        matrix.Scale(scale, scale);
+        matrix.Translate(-(bounds.X + bounds.Width / 2f), -(bounds.Y + bounds.Height / 2f));
+        path.Transform(matrix);
+        g.FillPath(brush, path);
+    }
+
+    private static void DrawBadge(Graphics g, PixelSize size, TileBadge badge)
+    {
+        var side = Math.Min(size.Width, size.Height);
+        var d = Math.Max(16f, side * 0.30f); // 15% maior que o primeiro desenho, a pedido
+        var margin = Math.Max(3f, side * 0.06f);
+        var rect = new RectangleF(margin, size.Height - d - margin, d, d);
+        using (var shape = RoundedRect(rect, d * 0.25f))
+        using (var fill = new SolidBrush(badge.Color))
+            g.FillPath(fill, shape);
+        FillGlyph(g, badge.Glyph, rect, d * 0.62f, Brushes.White);
+    }
+
+    private static GraphicsPath RoundedRect(RectangleF r, float radius)
+    {
+        var path = new GraphicsPath();
+        var dia = radius * 2;
+        path.AddArc(r.X, r.Y, dia, dia, 180, 90);
+        path.AddArc(r.Right - dia, r.Y, dia, dia, 270, 90);
+        path.AddArc(r.Right - dia, r.Bottom - dia, dia, dia, 0, 90);
+        path.AddArc(r.X, r.Bottom - dia, dia, dia, 90, 90);
+        path.CloseFigure();
+        return path;
+    }
+
+    /// <summary>Uma bolinha por item do carrossel, no topo; a do dispositivo atual preenchida.</summary>
+    private static void DrawPositionDots(Graphics g, PixelSize size, int count, int index)
+    {
+        var side = Math.Min(size.Width, size.Height);
+        var d = Math.Max(5f, side * 0.07f);
+        var gap = d * 0.7f;
+        var total = count * d + (count - 1) * gap;
+        if (total > size.Width - 8)
+            return;
+        var x = (size.Width - total) / 2;
+        var y = Math.Max(3f, side * 0.05f);
+        using var pen = new Pen(Color.FromArgb(200, 255, 255, 255), Math.Max(1f, d * 0.18f));
+        using var fill = new SolidBrush(Color.White);
+        for (var i = 0; i < count; i++)
+        {
+            var rect = new RectangleF(x + i * (d + gap), y, d, d);
+            if (i == index)
+                g.FillEllipse(fill, rect);
+            else
+                g.DrawEllipse(pen, rect);
+        }
     }
 
     /// <summary>A grade 3x3 de anéis que o Stream Deck usa quando não há app escolhido.</summary>

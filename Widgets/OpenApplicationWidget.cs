@@ -36,6 +36,8 @@ public sealed class OpenApplicationWidget : IWidget
     {
         _host = host;
         AppMonitor.Shared.UseLogger(host.LoggerFactory);
+        // Prepara a lista de apps e os ícones dela para a tela de configurações abrir sem espera.
+        _ = Task.Delay(TimeSpan.FromSeconds(5)).ContinueWith(_ => AppCatalog.WarmAsync(), TaskScheduler.Default);
         return ValueTask.CompletedTask;
     }
 

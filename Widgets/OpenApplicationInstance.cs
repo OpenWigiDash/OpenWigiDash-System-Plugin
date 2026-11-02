@@ -14,6 +14,7 @@ public sealed class OpenApplicationInstance : IWidgetInstance
     internal const string LongPressKey = "longPress";
     internal const string BringToFrontKey = "bringToFront";
     internal const string IconFitKey = "iconFit";
+    internal const string BackgroundKey = "background";
 
     /// <summary>Quanto o toque espera o monitor conferir se o app está aberto antes de decidir.</summary>
     private static readonly TimeSpan RefreshWait = TimeSpan.FromMilliseconds(400);
@@ -59,6 +60,7 @@ public sealed class OpenApplicationInstance : IWidgetInstance
             BringToFront = front;
         if (Enum.TryParse<IconFit>(await settings.GetAsync(IconFitKey, cancellationToken).ConfigureAwait(false), out var fit))
             IconFit = fit;
+        Background = TileColor.Normalize(await settings.GetAsync(BackgroundKey, cancellationToken).ConfigureAwait(false));
 
         if (App is not null)
         {
@@ -111,6 +113,20 @@ public sealed class OpenApplicationInstance : IWidgetInstance
         _context.RequestRender();
     }
 
+    /// <summary>Cor de fundo ("#RRGGBB"), ou <c>null</c> para o padrão (preto, ou a cor da placa do ícone).</summary>
+    public string? Background { get; private set; }
+
+    public async Task SetBackgroundAsync(string? hex)
+    {
+        Background = TileColor.Normalize(hex);
+        if (Background is null)
+            await _context.Settings.RemoveAsync(BackgroundKey).ConfigureAwait(false);
+        else
+            await _context.Settings.SetAsync(BackgroundKey, Background).ConfigureAwait(false);
+        Changed?.Invoke();
+        _context.RequestRender();
+    }
+
     public ValueTask<WidgetFrame> RenderAsync(RenderReason reason, CancellationToken cancellationToken) =>
         ValueTask.FromResult(TileRenderer.Render(_context.PixelSize, _context.Theme, CurrentVisual()));
 
@@ -120,11 +136,12 @@ public sealed class OpenApplicationInstance : IWidgetInstance
         {
             // No Mini não cabe aviso; o desenho padrão já diz que falta escolher.
             var compact = _context.PixelSize.Height < 100;
-            return new TileVisual(null, NullIfEmpty(Title), false, Detail: compact ? null : "Escolha um app");
+            return new TileVisual(null, NullIfEmpty(Title), false, Detail: compact ? null : "Escolha um app")
+                { Background = TileColor.Parse(Background) };
         }
         var missing = IsMissing;
         return new TileVisual(_platform.PeekIcon(App.Id), NullIfEmpty(Title), _watch.State.IsRunning, missing,
-            missing ? "Não encontrado" : null) { Fit = IconFit };
+            missing ? "Não encontrado" : null) { Fit = IconFit, Background = TileColor.Parse(Background) };
     }
 
     public async ValueTask OnTouchAsync(TouchEvent touch, CancellationToken cancellationToken)

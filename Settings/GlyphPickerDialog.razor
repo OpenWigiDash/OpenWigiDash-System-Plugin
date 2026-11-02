@@ -1,0 +1,61 @@
+@using OpenWigiDash.SystemPlugin.Audio
+@using OpenWigiDash.SystemPlugin.Icons
+
+@* Janela com todos os ícones, como a biblioteca do Stream Deck. Aberta pelo IDialogService, que desenha na raiz da
+   página: um MudOverlay dentro do painel lateral ficava atrás dos cantos dos widgets do canvas. Devolve a chave
+   escolhida, ou "" para Automático. *@
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string" @bind-Value="_search" Immediate="true" Placeholder="Buscar ícone" Variant="Variant.Outlined"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Class="mb-2" />
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+            <MudButton Size="Size.Small" Variant="@(_category is null ? Variant.Filled : Variant.Outlined)" Color="Color.Primary"
+                       OnClick="@(() => _category = null)">Todos</MudButton>
+            @foreach (var category in IconLibrary.CategoryNames)
+            {
+                var name = category;
+                <MudButton Size="Size.Small" Variant="@(_category == name ? Variant.Filled : Variant.Outlined)" Color="Color.Primary"
+                           OnClick="@(() => _category = name)">@name</MudButton>
+            }
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px">
+            @if (_category is null && string.IsNullOrWhiteSpace(_search))
+            {
+                <button type="button" style="@TileStyle(Current is null)" @onclick="@(() => Pick(""))">
+                    <GlyphView Option="@AudioGlyphs.For(null, DeviceName, Flow)" Size="34" />
+                    <span style="font-size:12px">Automático</span>
+                </button>
+            }
+            @foreach (var option in IconLibrary.Search(_category, _search))
+            {
+                var key = option.Key;
+                <button type="button" style="@TileStyle(string.Equals(Current, key, StringComparison.OrdinalIgnoreCase))"
+                        @onclick="() => Pick(key)">
+                    <GlyphView Option="@option" Size="34" />
+                    <span style="font-size:12px">@option.Name</span>
+                </button>
+            }
+        </div>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-3">
+            Para usar uma imagem sua, feche e clique no botão de imagem ao lado do dispositivo.
+        </MudText>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter] public string? Current { get; set; }
+    [Parameter] public string? DeviceName { get; set; }
+    [Parameter] public AudioFlow Flow { get; set; }
+
+    private string? _category;
+    private string? _search;
+
+    private static string TileStyle(bool selected) =>
+        "display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:8px;cursor:pointer;"
+        + "background:#000;color:#fff;"
+        + (selected ? "border:3px solid var(--mud-palette-primary)" : "border:1px solid var(--mud-palette-lines-default)");
+
+    private void Pick(string key) => Dialog.Close(DialogResult.Ok(key));
+}
