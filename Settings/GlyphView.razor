@@ -1,4 +1,4 @@
-@using OpenWigiDash.SystemPlugin.Audio
+@using OpenWigiDash.SystemPlugin.Icons
 
 @* Um ícone da lista, com o segundo glifo pequeno no canto quando é combinado (ex.: webcam + microfone). *@
 <span style="position:relative;display:inline-block;font-family:'Segoe Fluent Icons','Segoe MDL2 Assets';font-size:@(Size)px;line-height:1.2;width:@(Size * 1.15)px;text-align:center">
@@ -10,7 +10,7 @@
 </span>
 
 @code {
-    [Parameter, EditorRequired] public AudioGlyphs.GlyphOption Option { get; set; } = default!;
+    [Parameter, EditorRequired] public IconOption Option { get; set; } = default!;
     [Parameter] public int Size { get; set; } = 22;
     [Parameter] public string Background { get; set; } = "#000";
 }

@@ -1,39 +1,16 @@
+using OpenWigiDash.SystemPlugin.Icons;
+
 namespace OpenWigiDash.SystemPlugin.Audio;
 
-/// <summary>
-/// Ícones para os dispositivos, da fonte de ícones do Windows (Segoe Fluent Icons; Segoe MDL2 Assets no Windows 10).
-/// Enquanto o SDK não tem uma coleção de ícones do host, é esta lista.
-/// </summary>
+/// <summary>Ícone de cada dispositivo de áudio: o escolhido na <see cref="IconLibrary"/>, ou um palpite pelo nome.</summary>
 public static class AudioGlyphs
 {
-    /// <param name="Accent">Segundo glifo, pequeno no canto inferior direito (ex.: microfone sobre a webcam).</param>
-    public sealed record GlyphOption(string Key, string Name, string Glyph, string? Accent = null);
+    public static IReadOnlyList<IconOption> All => IconLibrary.All;
 
-    public static IReadOnlyList<GlyphOption> All { get; } =
-    [
-        new("speaker", "Alto-falante", ""),
-        new("headphones", "Fone de ouvido", ""),
-        new("headset", "Headset", ""),
-        new("microphone", "Microfone", ""),
-        new("camera", "Webcam", ""),
-        new("webcam-mic", "Webcam + microfone", "", ""),
-        new("monitor", "Monitor / TV", ""),
-        new("volume", "Volume", ""),
-        new("bluetooth", "Bluetooth", ""),
-        new("game", "Controle", ""),
-        new("music", "Música", ""),
-        new("phone", "Telefone", ""),
-        new("laptop", "Notebook", ""),
-        new("volume-high", "Volume alto", ""),
-        new("volume-low", "Volume baixo", ""),
-        new("mute", "Mudo", ""),
-    ];
-
-    public static GlyphOption? ByKey(string? key) =>
-        key is null ? null : All.FirstOrDefault(g => string.Equals(g.Key, key, StringComparison.OrdinalIgnoreCase));
+    public static IconOption? ByKey(string? key) => IconLibrary.ByKey(key);
 
     /// <summary>Ícone escolhido, ou um palpite pelo nome do dispositivo.</summary>
-    public static GlyphOption For(string? key, string? deviceName, AudioFlow flow)
+    public static IconOption For(string? key, string? deviceName, AudioFlow flow)
     {
         if (ByKey(key) is { } chosen)
             return chosen;

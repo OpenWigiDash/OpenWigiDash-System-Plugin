@@ -285,3 +285,23 @@ public class FlowBadgeTests
         public event Action? Changed { add { } remove { } }
     }
 }
+
+public class IconLibraryTests
+{
+    [Fact]
+    public void KeysAreUniqueAndEveryIconHasACategory()
+    {
+        var all = OpenWigiDash.SystemPlugin.Icons.IconLibrary.All;
+        Assert.Equal(all.Count, all.Select(i => i.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(all, i => Assert.False(string.IsNullOrWhiteSpace(i.Category)));
+    }
+
+    [Fact]
+    public void SearchFiltersByCategoryAndText()
+    {
+        var audio = OpenWigiDash.SystemPlugin.Icons.IconLibrary.Search(OpenWigiDash.SystemPlugin.Icons.IconLibrary.Categories.Audio, null).ToList();
+        Assert.Contains(audio, i => i.Key == "microphone");
+        Assert.DoesNotContain(audio, i => i.Key == "camera");
+        Assert.Contains(OpenWigiDash.SystemPlugin.Icons.IconLibrary.Search(null, "webcam"), i => i.Key == "webcam-mic");
+    }
+}
