@@ -2,6 +2,7 @@
 @using OpenWigiDash.SystemPlugin.Audio
 @inherits WidgetSettingsComponent<AudioDeviceInstance>
 @implements IDisposable
+@inject IDialogService Dialogs
 
 @* Placa de som: os campos do "Toggle Audio Device" do Stream Deck, com lista (carrossel) no lugar de primário e secundário. *@
 <MudStack Spacing="4">
@@ -95,64 +96,27 @@
     }
 </MudStack>
 
-@* Seletor de ícone: janela com todos os ícones, como a biblioteca do Stream Deck. *@
-<MudOverlay Visible="@(_pickerFor is not null)" DarkBackground="true" ZIndex="1400" OnClick="ClosePicker">
-    @if (_pickerFor is { } pickIndex && pickIndex < Instance.Entries.Count)
-    {
-        var current = Instance.Entries[pickIndex];
-        <div @onclick:stopPropagation="true">
-        <MudPaper Class="pa-4" Elevation="8" Style="max-width:560px;width:90vw;max-height:80vh;overflow:auto">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
-                <MudText Typo="Typo.h6" Style="flex:1">Ícone de @current.Name</MudText>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="ClosePicker" aria-label="Fechar" />
-            </MudStack>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px">
-                @{
-                    var auto = AudioGlyphs.For(null, current.Name, Instance.Flow);
-                }
-                <button type="button" style="@TileStyle(current.Glyph is null)" @onclick="() => PickGlyph(pickIndex, null)">
-                    <span style="@GlyphStyle">@auto.Glyph</span>
-                    <span style="font-size:12px">Automático</span>
-                </button>
-                @foreach (var option in AudioGlyphs.All)
-                {
-                    var key = option.Key;
-                    <button type="button" style="@TileStyle(string.Equals(current.Glyph, key, StringComparison.OrdinalIgnoreCase))"
-                            @onclick="() => PickGlyph(pickIndex, key)">
-                        <span style="@GlyphStyle">@option.Glyph</span>
-                        <span style="font-size:12px">@option.Name</span>
-                    </button>
-                }
-            </div>
-            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-3">
-                Para usar uma imagem sua, feche e clique no botão de imagem ao lado do dispositivo.
-            </MudText>
-        </MudPaper>
-        </div>
-    }
-</MudOverlay>
 
 @code {
     private string? _toAdd;
     private string? _defaultId;
     private string? _error;
-    private int? _pickerFor;
-
-    private const string GlyphStyle = "font-family:'Segoe Fluent Icons','Segoe MDL2 Assets';font-size:34px;line-height:1.2";
-
-    private static string TileStyle(bool selected) =>
-        "display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:8px;cursor:pointer;"
-        + "background:#000;color:#fff;"
-        + (selected ? "border:3px solid var(--mud-palette-primary)" : "border:1px solid var(--mud-palette-lines-default)");
-
-    private void OpenPicker(int index) => _pickerFor = index;
-
-    private void ClosePicker() => _pickerFor = null;
-
-    private async Task PickGlyph(int index, string? key)
+    private async Task OpenPicker(int index)
     {
-        _pickerFor = null;
-        await Instance.SetGlyphAsync(index, key);
+        if (index >= Instance.Entries.Count)
+            return;
+        var entry = Instance.Entries[index];
+        var parameters = new DialogParameters<GlyphPickerDialog>
+        {
+            { d => d.Current, entry.Glyph },
+            { d => d.DeviceName, entry.Name },
+            { d => d.Flow, Instance.Flow },
+        };
+        var dialog = await Dialogs.ShowAsync<GlyphPickerDialog>("Ícone de " + entry.Name, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true, CloseButton = true });
+        if (await dialog.Result is not { Canceled: false, Data: string key })
+            return;
+        await Instance.SetGlyphAsync(index, key.Length == 0 ? null : key);
     }
 
     private IEnumerable<AudioDevice> Available =>

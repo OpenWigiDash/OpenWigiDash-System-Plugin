@@ -1,0 +1,44 @@
+@using OpenWigiDash.SystemPlugin.Audio
+
+@* Janela com todos os ícones, como a biblioteca do Stream Deck. Aberta pelo IDialogService, que desenha na raiz da
+   página: um MudOverlay dentro do painel lateral ficava atrás dos cantos dos widgets do canvas. Devolve a chave
+   escolhida, ou "" para Automático. *@
+<MudDialog>
+    <DialogContent>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px">
+            <button type="button" style="@TileStyle(Current is null)" @onclick="@(() => Pick(""))">
+                <span style="@GlyphStyle">@AudioGlyphs.For(null, DeviceName, Flow).Glyph</span>
+                <span style="font-size:12px">Automático</span>
+            </button>
+            @foreach (var option in AudioGlyphs.All)
+            {
+                var key = option.Key;
+                <button type="button" style="@TileStyle(string.Equals(Current, key, StringComparison.OrdinalIgnoreCase))"
+                        @onclick="() => Pick(key)">
+                    <span style="@GlyphStyle">@option.Glyph</span>
+                    <span style="font-size:12px">@option.Name</span>
+                </button>
+            }
+        </div>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-3">
+            Para usar uma imagem sua, feche e clique no botão de imagem ao lado do dispositivo.
+        </MudText>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter] public string? Current { get; set; }
+    [Parameter] public string? DeviceName { get; set; }
+    [Parameter] public AudioFlow Flow { get; set; }
+
+    private const string GlyphStyle = "font-family:'Segoe Fluent Icons','Segoe MDL2 Assets';font-size:34px;line-height:1.2";
+
+    private static string TileStyle(bool selected) =>
+        "display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:8px;cursor:pointer;"
+        + "background:#000;color:#fff;"
+        + (selected ? "border:3px solid var(--mud-palette-primary)" : "border:1px solid var(--mud-palette-lines-default)");
+
+    private void Pick(string key) => Dialog.Close(DialogResult.Ok(key));
+}
