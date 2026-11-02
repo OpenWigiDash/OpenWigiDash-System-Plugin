@@ -36,7 +36,9 @@ if (-not (Test-Path -LiteralPath (Join-Path $staging "$name.dll"))) {
 
 # Passo 2: o manager segura a DLL carregada; precisa estar fechado para trocar
 Write-Host "[2/4] Checking for running OpenWigiDash Manager..." -ForegroundColor Green
-$manager = Get-Process -Name 'OpenWigiDashManager' -ErrorAction SilentlyContinue
+# Só o Manager desta sessão do Windows: com mais de um usuário logado, o dos outros não é nosso (e nem dá para fechar).
+$mySession = (Get-Process -Id $PID).SessionId
+$manager = Get-Process -Name 'OpenWigiDashManager' -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mySession }
 if ($manager) {
     if ($RestartManager) {
         $managerPath = $manager[0].Path
