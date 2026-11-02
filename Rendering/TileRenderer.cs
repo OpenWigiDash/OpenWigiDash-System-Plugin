@@ -234,16 +234,34 @@ public static class TileRenderer
         return fonts.Families.Any(f => f.Name == "Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets";
     }
 
+    /// <summary>
+    /// Desenha o glifo pelo contorno medido, não pelo tamanho da fonte: a caixa da fonte tem muita sobra em volta do
+    /// desenho, e o ícone ficava pequeno no tile.
+    /// </summary>
     private static void DrawGlyph(Graphics g, PixelSize size, WidgetTheme theme, string glyph, bool dimmed, bool hasText)
     {
         var side = Math.Min(size.Width, size.Height);
-        var em = side * (hasText ? 0.5f : 0.62f);
-        var top = hasText ? -size.Height * 0.08f : 0;
-        using var font = new Font(IconFont, em, FontStyle.Regular, GraphicsUnit.Pixel);
+        var top = side * 0.14f; // espaço das bolinhas de posição
+        var bottom = hasText ? size.Height * 0.70f : size.Height - side * 0.10f;
+        var box = new RectangleF(0, top, size.Width, Math.Max(1f, bottom - top));
+        var target = Math.Min(box.Height, side * 0.80f);
+
+        using var path = new GraphicsPath();
+        using (var family = new FontFamily(IconFont))
+            path.AddString(glyph, family, (int)FontStyle.Regular, 100f, PointF.Empty, StringFormat.GenericTypographic);
+        var bounds = path.GetBounds();
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            return;
+        var scale = target / Math.Max(bounds.Width, bounds.Height);
+        using var matrix = new Matrix();
+        matrix.Translate(box.X + box.Width / 2f, box.Y + box.Height / 2f);
+        matrix.Scale(scale, scale);
+        matrix.Translate(-(bounds.X + bounds.Width / 2f), -(bounds.Y + bounds.Height / 2f));
+        path.Transform(matrix);
+
         var color = ToColor(theme.PrimaryForeground);
         using var brush = new SolidBrush(dimmed ? Color.FromArgb(110, color) : color);
-        using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        g.DrawString(glyph, font, brush, new RectangleF(0, top, size.Width, size.Height), format);
+        g.FillPath(brush, path);
     }
 
     /// <summary>Uma bolinha por item do carrossel, no topo; a do dispositivo atual preenchida.</summary>
