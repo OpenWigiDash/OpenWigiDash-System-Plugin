@@ -78,24 +78,54 @@ do Windows (o PC está em português), então o código usa sempre `PdhAddEnglis
 
 ### Opções (tela de configuração)
 
-- **Monitor**: a métrica, agrupada por CPU, Memória, GPU, Rede e Disco. Só aparecem as que o PC tem (as
-  "Provável" somem quando a leitura não existe).
-- **Dispositivo**, quando faz sentido: qual GPU (pelo nome do DXGI), qual placa de rede (ou "todas"), qual disco
-  (ou "o mais ocupado").
-- **Intervalo**: 0,5 s a 5 s (padrão 1 s), como o "Polling" do System Vitals.
-- **Título**: automático pela métrica ("CPU", "GPU °C", "LAN Mbps"), ou texto livre.
-- **Unidade**, para rede: MB/s ou Mbps.
-- **Escala do gráfico**: fixa 0 a 100 nas porcentagens; automática (pelo maior valor da janela) em rede e watts;
-  temperatura de 20 a 100 °C, ajustável.
-- **Cores**: fundo, linha e preenchimento, com alguns temas prontos (o roxo e o verde-limão dos prints).
-- **Alerta** (opcional): acima de um valor, o fundo muda de cor (ex.: CPU acima de 90%).
+Levantadas do System Vitals instalado no PC do Victor (a tela de opções dele e os 11 botões salvos no perfil
+"Game Profile"). Mantemos as mesmas opções, com campos normais no lugar de SVG.
 
-O título e o número com unidade em sobrescrito ficam como no System Vitals; não vamos copiar o editor de SVG
-("Unit Value" com `<tspan>`), que é complicado demais para o que entrega.
+- **Monitor**: a métrica, agrupada como no System Vitals: Uso % (CPU, GPU, RAM, VRAM), Temperatura (GPU), Energia
+  (CPU W, GPU % e GPU W), Rede (MB/s, Mbps), Disco (% de atividade), Ping (Google 8.8.8.8, Cloudflare 1.1.1.1 ou
+  IP próprio). Só aparecem as que o PC tem.
+- **Dispositivo**, quando faz sentido: qual GPU (só os adaptadores com `GPU Adapter Memory`, porque a mesma placa
+  pode aparecer duas vezes), qual placa de rede (vazio = a principal), qual disco.
+- **Intervalo**: 0,5 s a 10 s (padrão 1 s). O System Vitals aceita de 0,1 s a 120 s; abaixo de 0,5 s não vale o
+  custo na USB.
+- **Mínimo e máximo do gráfico**: 0 a 100 fixo nas porcentagens; nas outras, máximo editável ou automático. Valores
+  que o System Vitals põe ao escolher a métrica e que vamos copiar: temperatura 0 a 120, watts com o limite da placa
+  quando a NVML dá (180 W na RTX 5060 Ti), ping 0 a 60 ms, rede automático.
+- **Título**: preenchido pela métrica ("CPU", "GPU °C", "CPU Watt", "LAN MB/s", "GOOGLE") e editável. Tamanho, cor
+  (padrão branco) e contorno.
+- **Valor**: tamanho, cor (padrão branco), contorno e unidade (%, °, W, ms ou nenhuma), com opção de sobrescrito.
+  O contorno, na cor do fundo, separa o número do gráfico.
+- **Estilo do gráfico**, os seis do System Vitals:
+  - Linha suave com preenchimento (padrão; o que o Victor usa): linha + degradê de 50% a 0% de opacidade.
+  - Preenchimento: só o degradê (100% a 0%).
+  - Linha.
+  - Linha com pontos.
+  - Hachurado: listras inclinadas (espessura, espaço, ângulo) recortadas pela área.
+  - Matriz: pontos em grade dentro da área (densidade, tamanho, opacidade).
+  - Ajustes: espessura da linha, opacidade em cima e embaixo, e "Base ↑" (o gráfico começa X% acima do rodapé,
+    padrão 10%).
+- **Cores**: fundo e gráfico, com a paleta de 32 cores do System Vitals mais seletor livre. Padrões e o que o Victor
+  usa hoje:
+
+  | Uso | Fundo | Gráfico |
+  | --- | --- | --- |
+  | CPU, RAM, rede (padrão do System Vitals) | `#12142D` (azul-marinho) | `#F700E7` (magenta) |
+  | GPU, VRAM | `#ADCC00` (verde-limão) | `#F700E7` |
+  | Ping | `#3C589A` (azul) | `#F700E7` |
+
+  Paleta: D800FF 66FFFF B4FF00 0000FF CCCCFF 00FF00 FFFFFF FFFD01 CC221E 5D535E 19B8EB 40E0D0 8E2462 F700E7
+  C6006C A1D6E2 FEA700 3C589A 8497B0 B18F6A DFCFBE 6B5B95 ADCC00 47DEEA 000000 F7D800 8B00F7 FF0000 00293C DFE166
+  006C84 F5CAE6.
+- **Imagem de fundo** (opcional): uma imagem sua atrás do gráfico, pelo `IWidgetFiles`.
+- **Alerta** (nosso, o System Vitals não tem): acima de um valor, o fundo muda de cor.
+
+O que não copiamos: o campo de unidade em SVG cru (`<tspan ...>`), o envio de telemetria que o System Vitals faz ao
+abrir, o log em `C:\temp` e a leitura de disco por `IOCTL_DISK_PERFORMANCE` (pede admin; usamos o contador do
+Windows).
 
 ### Toque
 
-Toque: nada por padrão, ou abrir o Gerenciador de Tarefas (opção). Long-press: alternar a escala ou zerar o gráfico.
+Toque: abre um programa, padrão o Gerenciador de Tarefas (`taskmgr.exe`), como no System Vitals. Long-press: alternar a escala ou zerar o gráfico.
 A definir com o Victor; não é o que importa no widget.
 
 ### Tamanhos
@@ -106,10 +136,14 @@ e texto em 97x69.
 
 ### Desenho
 
-Título em cima, valor grande no meio, gráfico de área preenchido em degradê na faixa de baixo, como nos prints.
-Desenho com `System.Drawing` no `context.PixelSize`, reaproveitando o texto que encolhe até caber do
-`TileRenderer`. Cada amostra nova desloca o gráfico: `PresentAsync` com o quadro inteiro e região suja só no
-tile, uma vez por intervalo (no máximo 2 quadros por segundo por tile).
+Como o System Vitals: título em cima (a 20% da altura), valor grande no centro, gráfico ocupando o tile inteiro por
+trás, com a curva suavizada (Bézier) e a base um pouco acima do rodapé. Fonte **Rajdhani** (a mesma dele; licença
+OFL, pode ir dentro do plugin), em negrito, com contorno. Desenho com `System.Drawing` (antialiasing, degradê,
+recorte para o hachurado) no `context.PixelSize`. O tile do WigiDash não é quadrado (Small 198x143), então os
+tamanhos de fonte são relativos à altura, não os px do 512x512 dele.
+
+Cada amostra nova desloca o gráfico: `PresentAsync` com o quadro inteiro e região suja só no tile, uma vez por
+intervalo.
 
 ### Coleta
 
