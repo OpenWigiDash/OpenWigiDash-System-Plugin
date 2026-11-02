@@ -13,9 +13,9 @@
         }
         <MudStack Spacing="2" Style="flex:1;min-width:280px">
             <MudSelect T="MetricKind" Value="C.Metric" ValueChanged="v => Instance.SetMetricAsync(v)" Label="Monitor" Variant="Variant.Outlined">
+                @* Sem cabeçalhos de grupo: o MudSelect desenha o MudListSubheader fora da lista. O nome já diz o grupo. *@
                 @foreach (var group in MetricCatalog.All.GroupBy(m => m.Group))
                 {
-                    <MudListSubheader>@MetricCatalog.GroupName(group.Key)</MudListSubheader>
                     @foreach (var metric in group)
                     {
                         var available = IsAvailable(metric.Kind);
