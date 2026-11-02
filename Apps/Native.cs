@@ -179,6 +179,13 @@ internal static class Native
     [DllImport("gdi32.dll")]
     public static extern bool DeleteObject(IntPtr ho);
 
+    /// <summary>Ícone de um .exe, .dll ou .ico no tamanho pedido (o Windows escala o maior que o arquivo tiver).</summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern uint PrivateExtractIcons(string file, int index, int cx, int cy, IntPtr[] icons, uint[]? ids, uint count, uint flags);
+
+    [DllImport("user32.dll")]
+    public static extern bool DestroyIcon(IntPtr icon);
+
     [DllImport("user32.dll")]
     public static extern IntPtr GetDC(IntPtr hWnd);
 

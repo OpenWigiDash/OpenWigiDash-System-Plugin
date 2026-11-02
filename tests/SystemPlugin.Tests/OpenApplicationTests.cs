@@ -189,6 +189,25 @@ public class TileRendererTests
         Assert.Equal(new System.Drawing.Rectangle(10, 20, 30, 24), OpenWigiDash.SystemPlugin.Rendering.TileRenderer.ContentBounds(icon));
     }
 
+    [Fact]
+    public void ContentBoundsIgnoresShellFrameAroundSmallIcon()
+    {
+        // O que o shell devolve para um exe que só tem ícone de 48 px (Intel PresentMon): o ícone no meio de 256 px e
+        // uma moldura fraca (alfa 26 a 77) encostada na borda.
+        using var icon = new System.Drawing.Bitmap(256, 256, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var g = System.Drawing.Graphics.FromImage(icon))
+        {
+            g.Clear(System.Drawing.Color.Transparent);
+            using var shadow = new System.Drawing.Pen(System.Drawing.Color.FromArgb(38, 0, 0, 0));
+            using var glow = new System.Drawing.Pen(System.Drawing.Color.FromArgb(77, 255, 255, 255));
+            g.DrawRectangle(shadow, 0, 0, 255, 255);
+            g.DrawRectangle(glow, 2, 2, 251, 251);
+            g.FillRectangle(new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(0, 59, 113)), 104, 104, 48, 48);
+        }
+
+        Assert.Equal(new System.Drawing.Rectangle(104, 104, 48, 48), OpenWigiDash.SystemPlugin.Rendering.TileRenderer.ContentBounds(icon));
+    }
+
     [Theory]
     [InlineData(OpenWigiDash.SystemPlugin.Rendering.IconFit.Padded)]
     [InlineData(OpenWigiDash.SystemPlugin.Rendering.IconFit.Fill)]
@@ -229,5 +248,95 @@ public class PlateTests
         var info = OpenWigiDash.SystemPlugin.Rendering.TileRenderer.Analyze(plate);
         Assert.Equal(System.Drawing.Color.FromArgb(16, 124, 16).ToArgb(), info.Plate?.ToArgb());
         Assert.Null(OpenWigiDash.SystemPlugin.Rendering.TileRenderer.Analyze(round).Plate);
+    }
+}
+
+public class CustomIconTests
+{
+    private static string WritePng(int width, int height, System.Drawing.Color color)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "owd-icon-" + Guid.NewGuid().ToString("N") + ".png");
+        using var bitmap = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var g = Graphics.FromImage(bitmap))
+            g.Clear(color);
+        bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        return path;
+    }
+
+    [Fact]
+    public void BigImageIsShrunkKeepingAspect()
+    {
+        var path = WritePng(2000, 1000, Color.Red);
+        try
+        {
+            using var icon = CustomIconFile.Load(path);
+            Assert.Equal(new Size(CustomIconFile.MaxSide, CustomIconFile.MaxSide / 2), icon.Size);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void NotAnImageFails()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "owd-icon-" + Guid.NewGuid().ToString("N") + ".png");
+        File.WriteAllText(path, "não é imagem");
+        try
+        {
+            Assert.Throws<InvalidDataException>(() => CustomIconFile.Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void ExeIconIsExtracted()
+    {
+        var explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+        using var icon = CustomIconFile.Load(explorer);
+        Assert.Equal(new Size(256, 256), icon.Size);
+    }
+
+    [Fact]
+    public async Task CustomIconReplacesAppIconAndSurvivesReload()
+    {
+        var context = new FakeContext(WidgetSize.Small);
+        var instance = new OpenApplicationInstance(context, new AppWatch(new AppMonitor()), new NullPlatform());
+        await instance.SetAppAsync(new AppChoice("x", "X"));
+        var path = WritePng(64, 64, Color.Blue);
+        try
+        {
+            await instance.SetCustomIconAsync(path);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+
+        Assert.NotNull(instance.CurrentVisual().Icon);
+        Assert.StartsWith("data:image/png;base64,", instance.CustomIconDataUrl);
+
+        // Outra instância com as mesmas configurações e arquivos (Manager reiniciado).
+        var reloaded = new OpenApplicationInstance(context, new AppWatch(new AppMonitor()), new NullPlatform());
+        await reloaded.LoadSettingsAsync(default);
+        Assert.Equal(Color.Blue.ToArgb(), reloaded.CurrentVisual().Icon!.GetPixel(10, 10).ToArgb());
+
+        var fileId = reloaded.CustomIconFileId!;
+        await reloaded.ClearCustomIconAsync();
+        Assert.Null(reloaded.CurrentVisual().Icon);
+        Assert.Null(await context.Files.GetPathAsync(fileId));
+    }
+
+    private sealed class NullPlatform : IAppPlatform
+    {
+        public void Launch(AppChoice app) { }
+        public bool BringToFront(AppState state) => false;
+        public void Quit(AppState state, LongPressAction action) { }
+        public Bitmap? PeekIcon(string id) => null;
+        public Task<Bitmap?> LoadIconAsync(string id, bool refresh) => Task.FromResult<Bitmap?>(null);
     }
 }
