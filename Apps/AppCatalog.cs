@@ -117,11 +117,18 @@ internal static class AppCatalog
             var name = item.GetDisplayName(Native.Sigdn.NormalDisplay, out var display) == 0 && !string.IsNullOrWhiteSpace(display)
                 ? display
                 : choice.Name;
-            return AppTarget.Build(choice.Id, name,
+            var target = AppTarget.Build(choice.Id, name,
                 GetString(item, Native.PKEY_AppUserModel_ID),
                 GetString(item, Native.PKEY_Link_TargetParsingPath),
                 GetString(item, Native.PKEY_Link_Arguments),
                 KnownFolderPath);
+            // O processo aberto vem com o caminho real. O EA instala em ...\EA Desktop\13.813.1.6327-...\EA Desktop e
+            // deixa um link ...\EA Desktop\EA Desktop apontando para lá; o atalho usa o link.
+            return target with
+            {
+                ExePath = FinalPath(target.ExePath),
+                InstallDirectory = FinalPath(target.InstallDirectory),
+            };
         }
         finally
         {
@@ -131,6 +138,33 @@ internal static class AppCatalog
 
     private static string? GetString(Native.IShellItem2 item, Native.PropertyKey key) =>
         item.GetString(key, out var value) == 0 && !string.IsNullOrWhiteSpace(value) ? value : null;
+
+    /// <summary>Caminho sem links (junction/symlink), como o Windows informa o exe de um processo aberto.</summary>
+    internal static string? FinalPath(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return path;
+        try
+        {
+            // FILE_READ_ATTRIBUTES basta; BACKUP_SEMANTICS deixa abrir pasta.
+            using var handle = Native.CreateFile(path, 0x80, 0x7 /* leitura, escrita e exclusão compartilhadas */, IntPtr.Zero,
+                3 /* OPEN_EXISTING */, 0x02000000 /* FILE_FLAG_BACKUP_SEMANTICS */, IntPtr.Zero);
+            if (handle.IsInvalid)
+                return path;
+            var buffer = new char[1024];
+            var length = Native.GetFinalPathNameByHandle(handle, buffer, (uint)buffer.Length, 0);
+            if (length == 0 || length >= buffer.Length)
+                return path;
+            var final = new string(buffer, 0, (int)length);
+            if (final.StartsWith(@"\\?\UNC\", StringComparison.Ordinal))
+                return @"\\" + final[8..];
+            return final.StartsWith(@"\\?\", StringComparison.Ordinal) ? final[4..] : final;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return path;
+        }
+    }
 
     private static string? KnownFolderPath(Guid id) =>
         Native.SHGetKnownFolderPath(id, 0, IntPtr.Zero, out var path) == 0 ? path : null;

@@ -82,3 +82,35 @@ public class AppMatcherTests
         Assert.False(snapshot.StateOf(null).IsRunning);
     }
 }
+
+public class FinalPathTests
+{
+    [Fact]
+    public void MissingPathIsReturnedAsIs() =>
+        Assert.Equal(@"C:\nao\existe\app.exe", AppCatalog.FinalPath(@"C:\nao\existe\app.exe"));
+
+    [Fact]
+    public void JunctionResolvesToRealFolder()
+    {
+        // O EA: ...\EA Desktop\EA Desktop é um link para ...\EA Desktop\13.813...\EA Desktop.
+        var root = Path.Combine(Path.GetTempPath(), "owd-final-" + Guid.NewGuid().ToString("N"));
+        var real = Path.Combine(root, "13.813.1", "EA Desktop");
+        var link = Path.Combine(root, "EA Desktop");
+        Directory.CreateDirectory(real);
+        try
+        {
+            using (var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{real}\"")
+                   { UseShellExecute = false, CreateNoWindow = true }))
+                mklink!.WaitForExit();
+            Assert.True(Directory.Exists(link));
+
+            Assert.Equal(real, AppCatalog.FinalPath(link), ignoreCase: true);
+        }
+        finally
+        {
+            if (Directory.Exists(link))
+                Directory.Delete(link);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
