@@ -1,16 +1,34 @@
+@using System.Globalization
 @using OpenWigiDash.SystemPlugin.Icons
 
-@* Um ícone da lista, com o segundo glifo pequeno no canto quando é combinado (ex.: webcam + microfone). *@
-<span style="position:relative;display:inline-block;font-family:'Segoe Fluent Icons','Segoe MDL2 Assets';font-size:@(Size)px;line-height:1.2;width:@(Size * 1.15)px;text-align:center">
-    @Option.Glyph
-    @if (Option.Accent is { } accent)
-    {
-        <span style="position:absolute;right:-@(Size * 0.12)px;bottom:-@(Size * 0.02)px;font-size:@(Size * 0.5)px;line-height:1;padding:1px;border-radius:50%;background:@Background">@accent</span>
-    }
-</span>
+@* Um ícone da biblioteca. Quando é combinado (ex.: webcam + microfone), usa as mesmas proporções do tile
+   (TileRenderer.DrawGlyph): o principal um pouco menor e para cima/esquerda, o segundo num círculo no canto. *@
+@if (Option.Accent is { } accent)
+{
+    <span style="position:relative;display:inline-block;flex:none;width:@Px(Box);height:@Px(Box)">
+        <span style="@Cell(Box / 2 - Size * 0.08, Box / 2 - Size * 0.06, Size * 1.0, Size * 0.86)">@Option.Glyph</span>
+        <span style="@Cell(Box / 2 + Size * 0.30, Box / 2 + Size * 0.26, Size * 0.62, Size * 0.50);border-radius:50%;background:@Background">@accent</span>
+    </span>
+}
+else
+{
+    <span style="display:inline-flex;align-items:center;justify-content:center;flex:none;width:@Px(Box);height:@Px(Box);@Font(Size)">@Option.Glyph</span>
+}
 
 @code {
     [Parameter, EditorRequired] public IconOption Option { get; set; } = default!;
     [Parameter] public int Size { get; set; } = 22;
     [Parameter] public string Background { get; set; } = "#000";
+
+    private double Box => Size * 1.2;
+
+    private static string Px(double value) => value.ToString("0.#", CultureInfo.InvariantCulture) + "px";
+
+    private static string Font(double size) =>
+        $"font-family:'Segoe Fluent Icons','Segoe MDL2 Assets';font-size:{Px(size)};line-height:1";
+
+    /// <summary>Caixa quadrada de lado <paramref name="side"/> centrada em (cx, cy), com o glifo no meio.</summary>
+    private static string Cell(double cx, double cy, double side, double fontSize) =>
+        $"position:absolute;left:{Px(cx - side / 2)};top:{Px(cy - side / 2)};width:{Px(side)};height:{Px(side)};"
+        + $"display:flex;align-items:center;justify-content:center;{Font(fontSize)}";
 }
