@@ -41,6 +41,14 @@
                       Label="Comando" Variant="Variant.Outlined" Immediate="false" Lines="4" AutoGrow="true"
                       Style="font-family:Consolas,monospace"
                       HelperText="@(A.Shell == CommandShell.Cmd ? "Várias linhas rodam em sequência, como num .bat." : "Pode ter várias linhas, como um script.")" />
+        @if (A.LooksLikePowerShellInCmd)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true">
+                Isso parece PowerShell, mas vai rodar no cmd: só as linhas que o cmd entende funcionam.
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                           OnClick="() => Save(A with { Shell = CommandShell.PowerShell })">Rodar no PowerShell</MudButton>
+            </MudAlert>
+        }
     }
 
     <MudStack Spacing="1">

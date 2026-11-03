@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace OpenWigiDash.SystemPlugin.Execute;
 
@@ -65,12 +67,15 @@ public sealed record ExecuteAction
     /// <summary>Espera terminar e usa o código de saída (0 = deu certo). Desligado: deu certo = abriu.</summary>
     public bool WaitForExit { get; init; }
 
+    [JsonIgnore]
     public bool IsEmpty => Mode == ExecuteMode.Program ? string.IsNullOrWhiteSpace(Path) : string.IsNullOrWhiteSpace(Command);
 
     /// <summary>Caminho do programa com as variáveis expandidas e sem aspas.</summary>
+    [JsonIgnore]
     public string ResolvedPath => Clean(Path);
 
     /// <summary>Pasta de execução que vai ser usada (já com o padrão quando vazia), ou <c>null</c> se não há.</summary>
+    [JsonIgnore]
     public string? ResolvedWorkingDirectory
     {
         get
@@ -84,6 +89,18 @@ public sealed record ExecuteAction
             return System.IO.Path.IsPathFullyQualified(file) ? System.IO.Path.GetDirectoryName(file) : null;
         }
     }
+
+    /// <summary>
+    /// Comando de PowerShell escolhido para rodar no cmd (cmdlets como Start-Sleep, Add-Type, [Tipo]::Metodo): o cmd roda
+    /// só as linhas que entende e o resto falha. A tela de configurações avisa.
+    /// </summary>
+    [JsonIgnore]
+    public bool LooksLikePowerShellInCmd =>
+        Mode == ExecuteMode.Command && Shell == CommandShell.Cmd && PowerShellHint.IsMatch(Command);
+
+    private static readonly Regex PowerShellHint = new(
+        @"\b(Get|Set|Start|Stop|New|Remove|Add|Invoke|Write|Out|Select|Where|ForEach|Test|Import)-[A-Za-z]+\b|\[[A-Za-z.]+\]::|\$[A-Za-z_]",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     internal static string Clean(string? text) =>
         Environment.ExpandEnvironmentVariables((text ?? "").Trim().Trim('"').Trim());

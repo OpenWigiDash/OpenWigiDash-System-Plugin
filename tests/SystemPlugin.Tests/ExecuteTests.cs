@@ -297,6 +297,21 @@ public class ExecuteTests
     }
 
     [Fact]
+    public void WarnsWhenPowerShellIsSetToRunInCmd()
+    {
+        var lockAndSleep = new ExecuteAction
+        {
+            Mode = ExecuteMode.Command,
+            Command = "rundll32.exe user32.dll,LockWorkStation\nStart-Sleep -Seconds 2\n[W.M]::PostMessage(0)",
+        };
+
+        Assert.True(lockAndSleep.LooksLikePowerShellInCmd);
+        Assert.False((lockAndSleep with { Shell = CommandShell.PowerShell }).LooksLikePowerShellInCmd);
+        Assert.False((lockAndSleep with { Command = "cd /d C:\\src & git pull" }).LooksLikePowerShellInCmd);
+        Assert.False((lockAndSleep with { Command = "echo %USERPROFILE%" }).LooksLikePowerShellInCmd);
+    }
+
+    [Fact]
     public void ValidationExplainsMissingFiles()
     {
         Assert.Equal("Escolha o programa.", ProcessExecuteRunner.Validate(new ExecuteAction()));
