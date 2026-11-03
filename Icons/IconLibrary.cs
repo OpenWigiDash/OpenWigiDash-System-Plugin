@@ -17,6 +17,7 @@ public static class IconLibrary
         public const string Devices = "Dispositivos";
         public const string Communication = "Comunicação";
         public const string System = "Sistema";
+        public const string Actions = "Ações";
     }
 
     public static IReadOnlyList<IconOption> All { get; } =
@@ -55,6 +56,22 @@ public static class IconLibrary
         new("lock", "Bloquear", Categories.System, "\uE72E"),
         new("home", "Início", Categories.System, "\uE80F"),
         new("wifi", "Wi-Fi", Categories.System, "\uE701"),
+        new("admin", "Administrador", Categories.System, "\uE7EF"),
+        new("shield", "Escudo", Categories.System, "\uEA18"),
+        // Ações (widget Execute)
+        new("terminal", "Terminal", Categories.Actions, "\uE756"),
+        new("code", "Código / script", Categories.Actions, "\uE943"),
+        new("lightning", "Raio", Categories.Actions, "\uE945"),
+        new("run", "Executar", Categories.Actions, "\uE768"),
+        new("folder", "Pasta", Categories.Actions, "\uE8B7"),
+        new("globe", "Internet", Categories.Actions, "\uE774"),
+        new("refresh", "Atualizar", Categories.Actions, "\uE72C"),
+        new("sync", "Sincronizar", Categories.Actions, "\uE895"),
+        new("download", "Baixar", Categories.Actions, "\uE896"),
+        new("upload", "Enviar", Categories.Actions, "\uE898"),
+        new("delete", "Apagar", Categories.Actions, "\uE74D"),
+        new("save", "Salvar", Categories.Actions, "\uE74E"),
+        new("open-window", "Abrir janela", Categories.Actions, "\uE8A7"),
     ];
 
     /// <summary>Categorias na ordem da lista.</summary>
