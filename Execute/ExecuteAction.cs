@@ -24,6 +24,15 @@ public enum CommandShell
     Pwsh,
 }
 
+/// <summary>Que gesto no tile dispara a ação.</summary>
+public enum ExecuteTrigger
+{
+    /// <summary>Toque (padrão). Long-press encerra o que está sendo esperado.</summary>
+    Tap,
+    /// <summary>Segurar o dedo: evita disparar sem querer (bloquear o PC, desligar). Toque não faz nada.</summary>
+    LongPress,
+}
+
 /// <summary>Como a janela do programa abre.</summary>
 public enum ExecuteWindow
 {
@@ -41,6 +50,9 @@ public enum ExecuteWindow
 public sealed record ExecuteAction
 {
     public ExecuteMode Mode { get; init; } = ExecuteMode.Program;
+
+    /// <summary>Toque ou long-press dispara. Layouts salvos antes desta opção ficam no toque.</summary>
+    public ExecuteTrigger Trigger { get; init; } = ExecuteTrigger.Tap;
 
     /// <summary>Modo programa: caminho do arquivo. Aceita variáveis (%USERPROFILE%) e aspas em volta.</summary>
     public string Path { get; init; } = "";

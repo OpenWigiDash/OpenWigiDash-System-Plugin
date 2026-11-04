@@ -277,14 +277,19 @@ public sealed class ExecuteInstance : IWidgetInstance
 
     public ValueTask OnTouchAsync(TouchEvent touch, CancellationToken cancellationToken)
     {
+        var byLongPress = Action.Trigger == ExecuteTrigger.LongPress;
         switch (touch.Kind)
         {
-            case TouchKind.Tap:
+            case TouchKind.Tap when !byLongPress:
                 // Não espera: o toque volta na hora e o tile mostra o andamento.
                 _ = RunAsync();
                 break;
-            case TouchKind.LongPress:
+            case TouchKind.LongPress when IsRunning:
+                // Nos dois modos, segurar enquanto espera o programa terminar encerra.
                 Stop();
+                break;
+            case TouchKind.LongPress when byLongPress:
+                _ = RunAsync();
                 break;
         }
         return ValueTask.CompletedTask;

@@ -159,12 +159,57 @@ public class ExecuteTests
     }
 
     [Fact]
+    public async Task LongPressTriggerIgnoresTapAndRunsOnHold()
+    {
+        var (instance, runner, _) = Create();
+        await instance.SetActionAsync(Notepad with { Trigger = ExecuteTrigger.LongPress });
+
+        await instance.OnTouchAsync(Tap, default);
+        await Task.Delay(50);
+        Assert.Empty(runner.Calls);
+
+        await instance.OnTouchAsync(Hold, default);
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (runner.Calls.Count == 0 && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
+        Assert.Single(runner.Calls);
+    }
+
+    [Fact]
+    public async Task LongPressTriggerHoldStopsWhatIsRunning()
+    {
+        var (instance, runner, _) = Create();
+        await instance.SetActionAsync(Notepad with { Trigger = ExecuteTrigger.LongPress, WaitForExit = true });
+        runner.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var run = instance.RunAsync();
+        await instance.OnTouchAsync(Hold, default);
+        await run;
+
+        Assert.True(runner.WasCancelled);
+        Assert.Single(runner.Calls);
+    }
+
+    [Fact]
+    public async Task TapTriggerIsTheDefaultForOldSettings()
+    {
+        var context = new FakeContext(WidgetSize.Small);
+        await context.Settings.SetAsync(ExecuteInstance.ActionKey, "{\"mode\":0,\"path\":\"notepad\"}");
+        var instance = new ExecuteInstance(context, new FakeRunner(), _ => Task.FromResult<System.Drawing.Bitmap?>(null));
+
+        await instance.LoadSettingsAsync(default);
+
+        Assert.Equal(ExecuteTrigger.Tap, instance.Action.Trigger);
+    }
+
+    [Fact]
     public async Task SettingsSurviveReload()
     {
         var (instance, _, context) = Create();
         var action = new ExecuteAction
         {
             Mode = ExecuteMode.Command,
+            Trigger = ExecuteTrigger.LongPress,
             Command = "echo oi",
             Shell = CommandShell.PowerShell,
             WorkingDirectory = @"C:\Temp",

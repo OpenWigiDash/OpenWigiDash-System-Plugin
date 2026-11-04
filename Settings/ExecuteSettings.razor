@@ -17,6 +17,13 @@
         <MudSelectItem Value="ExecuteMode.Command">Comando (cmd ou PowerShell)</MudSelectItem>
     </MudSelect>
 
+    <MudSelect T="ExecuteTrigger" Value="A.Trigger" ValueChanged="v => Save(A with { Trigger = v })" Label="Acionar com"
+               Variant="Variant.Outlined"
+               HelperText="@(A.Trigger == ExecuteTrigger.LongPress ? "Toque não faz nada: bom para ações que não podem disparar sem querer." : "Long-press encerra o que estiver rodando.")">
+        <MudSelectItem Value="ExecuteTrigger.Tap">Toque</MudSelectItem>
+        <MudSelectItem Value="ExecuteTrigger.LongPress">Long-press (segurar)</MudSelectItem>
+    </MudSelect>
+
     @if (A.Mode == ExecuteMode.Program)
     {
         <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2">
@@ -84,7 +91,7 @@
         </MudCheckBox>
         <MudText Typo="Typo.caption" Color="Color.Secondary" Style="margin-left:42px">
             @(A.WaitForExit
-                ? "Verde se sair com código 0, vermelho se não. Enquanto roda, o tile mostra um relógio; long-press encerra."
+                ? "Verde se sair com código 0, vermelho se não. Enquanto roda, o tile mostra um relógio; segurar encerra."
                 : "Verde assim que abrir, vermelho se não abrir (arquivo não encontrado, UAC cancelado...).")
         </MudText>
     </MudStack>

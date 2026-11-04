@@ -60,6 +60,8 @@ fundo são escolhidos à mão.
     pastas, links e documentos abrem pelo Windows, como um duplo clique.
   - **Comando**: no cmd (várias linhas rodam em sequência), no Windows PowerShell ou no PowerShell 7 (script inteiro,
     com várias linhas). Pasta de execução vazia = a pasta do usuário.
+- **Acionar com**: toque (padrão) ou long-press. No long-press o toque não faz nada, o que evita disparar sem querer
+  ações como bloquear o PC.
 - **Janela**: normal, minimizada, maximizada ou oculta. Com janela, comando e `.ps1` podem **manter a janela aberta**.
 - **Esperar terminar e conferir o resultado**: verde se sair com código 0, vermelho se não; enquanto roda, um relógio
   azul no canto, e o long-press encerra. Desligado, verde = abriu. Ao mudar para Comando, já vem ligado e sem janela.
