@@ -26,6 +26,10 @@ public sealed record AppChoice(string Id, string Name);
 /// Pasta onde procurar o processo aberto, quando ele não é o exe do atalho: a do Update.exe no Squirrel, ou a do exe
 /// num launcher que abre outro exe ao lado (EA app).
 /// </param>
+/// <param name="LinkArguments">
+/// Argumentos que o atalho do Iniciar já passa ao <see cref="ExePath"/> (ex.: <c>--processStart Discord.exe</c>). Quem
+/// abre o exe direto, para acrescentar argumentos, precisa mandar estes também.
+/// </param>
 public sealed record AppTarget(
     string Id,
     string Name,
@@ -33,7 +37,8 @@ public sealed record AppTarget(
     string? Aumid,
     string? ExePath,
     string? ProcessName,
-    string? InstallDirectory)
+    string? InstallDirectory,
+    string? LinkArguments = null)
 {
     private static readonly Regex PackagedId = new(@"^[^\\!]+_[a-z0-9]{13}![^\\]+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex KnownFolderId = new(@"^(\{[0-9a-f\-]{36}\})\\(.+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -82,7 +87,10 @@ public sealed record AppTarget(
                 directory = null;
         }
 
-        return new AppTarget(id, name, false, appId, exe, processName, directory);
+        var shortcutArguments = exe is not null && IsExe(linkTarget) && !string.IsNullOrWhiteSpace(linkArguments)
+            ? linkArguments.Trim()
+            : null;
+        return new AppTarget(id, name, false, appId, exe, processName, directory, shortcutArguments);
     }
 
     private static bool IsExe(string? path) =>

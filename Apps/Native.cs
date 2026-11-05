@@ -55,6 +55,19 @@ internal static class Native
         public int Cy = cy;
     }
 
+    /// <summary>Ativa um app da Store pelo AUMID, com argumentos (o shell:AppsFolder não repassa argumentos).</summary>
+    [ComImport, Guid("2e941141-7f97-4756-ba1d-9decde894a3d"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IApplicationActivationManager
+    {
+        // Só o primeiro método da interface é usado; os outros (ActivateForFile, ActivateForProtocol) vêm depois.
+        [PreserveSig]
+        int ActivateApplication([MarshalAs(UnmanagedType.LPWStr)] string appUserModelId,
+            [MarshalAs(UnmanagedType.LPWStr)] string? arguments, int options, out uint processId);
+    }
+
+    [ComImport, Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")]
+    public class ApplicationActivationManager { }
+
     [ComImport, Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     public interface IShellItem
     {
