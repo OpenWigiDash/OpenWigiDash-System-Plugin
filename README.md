@@ -31,6 +31,12 @@ Opções:
 
 - **Título**: texto embaixo do ícone (vazio = só o ícone).
 - **App**: busca pelo nome, com ícone.
+- **Argumentos**: passados ao app ao abrir, como na linha de comando (aceita `%USERPROFILE%`). Exemplo: o app
+  "Conexão de Área de Trabalho Remota" com `/v:MEU-PC /f` conecta direto no MEU-PC em tela cheia; um arquivo `.rdp`
+  também serve (`"%USERPROFILE%\Documents\MEU-PC.rdp"`). O Iniciar não repassa argumentos, então com argumentos o
+  app comum abre direto pelo exe do atalho (com os argumentos do próprio atalho antes; no Squirrel, em
+  `--process-start-args`) e o da Store é ativado pelo AUMID. Para vários tiles do mesmo app com argumentos diferentes,
+  desligue "Trazer para a frente", senão o toque só mostra a janela que já está aberta.
 - **Ícone do PC**: troca o ícone do app por uma imagem (.png, .jpg, .bmp, .gif) ou pelo ícone de um .ico, .exe ou
   .dll. O arquivo é copiado para o widget, então pode ser apagado depois. "Usar o ícone do app" volta ao padrão.
   Serve para apps que só trazem ícone pequeno: o PresentMon da Intel, por exemplo, vai só até 48 px e fica borrado

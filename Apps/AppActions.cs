@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace OpenWigiDash.SystemPlugin.Apps;
 
@@ -21,6 +22,47 @@ internal static class AppActions
     /// </summary>
     public static void Launch(AppChoice app) =>
         Process.Start(new ProcessStartInfo($@"shell:AppsFolder\{app.Id}") { UseShellExecute = true })?.Dispose();
+
+    /// <summary>
+    /// Abre com argumentos (<see cref="AppLaunch.Plan"/>). Sem argumentos é o mesmo que <see cref="Launch(AppChoice)"/>.
+    /// <paramref name="target"/> é o alvo que o monitor já resolveu; se ainda não resolveu, pergunta ao shell aqui.
+    /// </summary>
+    public static void Launch(AppChoice app, AppTarget? target, string? arguments)
+    {
+        if (AppLaunch.Normalize(arguments).Length == 0)
+        {
+            Launch(app);
+            return;
+        }
+        target ??= Sta.RunAsync(() => AppCatalog.Resolve(app)).GetAwaiter().GetResult();
+        var plan = AppLaunch.Plan(app, target, arguments);
+        switch (plan.Kind)
+        {
+            case LaunchKind.Packaged:
+                Sta.RunAsync(() =>
+                {
+                    var manager = (Native.IApplicationActivationManager)new Native.ApplicationActivationManager();
+                    try
+                    {
+                        Marshal.ThrowExceptionForHR(manager.ActivateApplication(plan.File, plan.Arguments, 0, out _));
+                    }
+                    finally
+                    {
+                        Marshal.ReleaseComObject(manager);
+                    }
+                    return true;
+                }).GetAwaiter().GetResult();
+                break;
+
+            default:
+                // Pelo shell: um exe que pede administrador mostra o UAC em vez de falhar.
+                var info = new ProcessStartInfo(plan.File) { Arguments = plan.Arguments, UseShellExecute = true };
+                if (plan.Kind == LaunchKind.Exe && Path.GetDirectoryName(plan.File) is { Length: > 0 } folder)
+                    info.WorkingDirectory = folder;
+                Process.Start(info)?.Dispose();
+                break;
+        }
+    }
 
     /// <summary>
     /// Traz a janela do app para a frente. <c>false</c> se não há janela (app só na bandeja): aí quem chamou abre

@@ -14,7 +14,8 @@ public class OpenApplicationTests
         public List<string> Calls { get; } = [];
         public bool HasWindow { get; set; } = true;
 
-        public void Launch(AppChoice app) => Calls.Add("launch " + app.Name);
+        public void Launch(AppChoice app, AppTarget? target, string? arguments) =>
+            Calls.Add("launch " + app.Name + (arguments is null ? "" : " " + arguments));
         public bool BringToFront(AppState state)
         {
             Calls.Add("front");
@@ -85,6 +86,26 @@ public class OpenApplicationTests
 
         await instance.OnTouchAsync(Tap, default);
 
+        Assert.Equal(new[] { "launch Steam" }, platform.Calls);
+    }
+
+    [Fact]
+    public async Task TapLaunchesWithArgumentsAndTheyPersist()
+    {
+        var (instance, _, platform, context) = Create();
+        await instance.SetAppAsync(Steam);
+        await instance.SetArgumentsAsync("  -bigpicture  ");
+
+        await instance.OnTouchAsync(Tap, default);
+        Assert.Equal(new[] { "launch Steam -bigpicture" }, platform.Calls);
+
+        var reloaded = new OpenApplicationInstance(context, new AppWatch(new AppMonitor()), new FakePlatform());
+        await reloaded.LoadSettingsAsync(default);
+        Assert.Equal("-bigpicture", reloaded.Arguments);
+
+        await instance.SetArgumentsAsync("");
+        platform.Calls.Clear();
+        await instance.OnTouchAsync(Tap, default);
         Assert.Equal(new[] { "launch Steam" }, platform.Calls);
     }
 
@@ -333,7 +354,7 @@ public class CustomIconTests
 
     private sealed class NullPlatform : IAppPlatform
     {
-        public void Launch(AppChoice app) { }
+        public void Launch(AppChoice app, AppTarget? target, string? arguments) { }
         public bool BringToFront(AppState state) => false;
         public void Quit(AppState state, LongPressAction action) { }
         public Bitmap? PeekIcon(string id) => null;

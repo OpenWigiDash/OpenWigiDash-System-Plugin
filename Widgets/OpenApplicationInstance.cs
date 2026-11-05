@@ -17,6 +17,7 @@ public sealed class OpenApplicationInstance : IWidgetInstance
     internal const string IconFitKey = "iconFit";
     internal const string BackgroundKey = "background";
     internal const string CustomIconKey = "customIcon";
+    internal const string ArgumentsKey = "arguments";
 
     /// <summary>Quanto o toque espera o monitor conferir se o app está aberto antes de decidir.</summary>
     private static readonly TimeSpan RefreshWait = TimeSpan.FromMilliseconds(400);
@@ -39,6 +40,9 @@ public sealed class OpenApplicationInstance : IWidgetInstance
     public bool BringToFront { get; private set; } = true;
     public IconFit IconFit { get; private set; } = IconFit.Fill;
 
+    /// <summary>Argumentos para o app (ex.: <c>/v:MEU-PC</c> no RDP). Vazio = abre pelo Iniciar, como antes.</summary>
+    public string Arguments { get; private set; } = "";
+
     /// <summary>Para a tela de configurações: para onde o app aponta hoje e se está aberto.</summary>
     public AppTarget? Target => _watch.Target;
     public AppState State => _watch.State;
@@ -56,6 +60,7 @@ public sealed class OpenApplicationInstance : IWidgetInstance
         var settings = _context.Settings;
         App = await settings.GetJsonAsync<AppChoice?>(AppKey, null, cancellationToken).ConfigureAwait(false);
         Title = await settings.GetAsync(TitleKey, cancellationToken).ConfigureAwait(false) ?? "";
+        Arguments = await settings.GetAsync(ArgumentsKey, cancellationToken).ConfigureAwait(false) ?? "";
         if (Enum.TryParse<LongPressAction>(await settings.GetAsync(LongPressKey, cancellationToken).ConfigureAwait(false), out var action))
             LongPress = action;
         if (bool.TryParse(await settings.GetAsync(BringToFrontKey, cancellationToken).ConfigureAwait(false), out var front))
@@ -93,6 +98,16 @@ public sealed class OpenApplicationInstance : IWidgetInstance
         await _context.Settings.SetAsync(TitleKey, Title).ConfigureAwait(false);
         Changed?.Invoke();
         _context.RequestRender();
+    }
+
+    public async Task SetArgumentsAsync(string arguments)
+    {
+        Arguments = arguments?.Trim() ?? "";
+        if (Arguments.Length == 0)
+            await _context.Settings.RemoveAsync(ArgumentsKey).ConfigureAwait(false);
+        else
+            await _context.Settings.SetAsync(ArgumentsKey, Arguments).ConfigureAwait(false);
+        Changed?.Invoke();
     }
 
     public async Task SetLongPressAsync(LongPressAction action)
@@ -235,7 +250,7 @@ public sealed class OpenApplicationInstance : IWidgetInstance
                     var state = _watch.State;
                     if (BringToFront && state.IsRunning && _platform.BringToFront(state))
                         break;
-                    _platform.Launch(app);
+                    _platform.Launch(app, _watch.Target, NullIfEmpty(Arguments));
                     break;
 
                 case TouchKind.LongPress when LongPress != LongPressAction.DoNothing:

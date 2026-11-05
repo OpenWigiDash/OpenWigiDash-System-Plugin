@@ -45,6 +45,11 @@
         <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="ReloadApps" aria-label="Ler a lista de apps de novo" />
     </MudStack>
 
+    <MudTextField T="string" Value="@Instance.Arguments" ValueChanged="v => Instance.SetArgumentsAsync(v)" Label="Argumentos"
+                  Variant="Variant.Outlined" Immediate="false" Clearable="true"
+                  Placeholder="ex.: /v:MEU-PC /f"
+                  HelperText="Do jeito que iriam na linha de comando; aceita %USERPROFILE%. Com argumentos, o app abre direto pelo exe (ou ativado, se for da Store). Vários tiles do mesmo app com argumentos diferentes (RDP para PCs diferentes): desmarque “Trazer para a frente”." />
+
     <MudStack Spacing="1">
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
             @if (Instance.CustomIconDataUrl is { } custom)
@@ -100,7 +105,7 @@
         @if (Instance.Target is { } target)
         {
             <MudText Typo="Typo.caption" Color="Color.Secondary" Style="word-break: break-all">
-                @(target.ExePath ?? target.Aumid ?? target.Id)
+                @LaunchText(target)
             </MudText>
         }
     }
@@ -162,6 +167,17 @@
         if (!string.IsNullOrWhiteSpace(text) && !string.Equals(text, Instance.App?.Name, StringComparison.CurrentCulture))
             apps = apps.Where(a => a.Name.Contains(text, StringComparison.CurrentCultureIgnoreCase));
         return Task.FromResult(apps);
+    }
+
+    /// <summary>O que o toque abre: o exe ou o AUMID, e com argumentos, a linha de comando inteira.</summary>
+    private string LaunchText(AppTarget target)
+    {
+        if (string.IsNullOrWhiteSpace(Instance.Arguments) || Instance.App is not { } app)
+            return target.ExePath ?? target.Aumid ?? target.Id;
+        var plan = AppLaunch.Plan(app, target, Instance.Arguments);
+        return plan.Kind == LaunchKind.StartMenu
+            ? "Sem exe conhecido: abre pelo Iniciar, que pode ignorar os argumentos."
+            : $"{plan.File} {plan.Arguments}";
     }
 
     private Task SelectApp(AppChoice? app) => Instance.SetAppAsync(app);
